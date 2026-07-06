@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, fmtMoney, fmtSignedMoney, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
-import { ArrowDownToLine, ArrowUpFromLine, CandlestickChart, LogOut, Wallet } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpFromLine, CandlestickChart, LogOut, Wallet, Home, ArrowLeftRight } from 'lucide-react'
 
 const App = () => {
   const router = useRouter()
@@ -99,7 +99,7 @@ const App = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-10 pb-28 md:pb-10">
         <h1 className="text-2xl font-bold">Wallet</h1>
         <p className="text-white/40 text-sm mt-1">{user ? `Welcome back, ${user.name}` : 'Loading…'}</p>
 
@@ -204,6 +204,26 @@ const App = () => {
           </div>
         </div>
       </main>
+
+      {/* MOBILE BOTTOM NAV */}
+      <nav data-testid="mobile-bottom-nav" className="md:hidden fixed bottom-0 inset-x-0 h-16 border-t border-white/10 bg-black flex items-stretch z-30">
+        <button data-testid="bottomnav-home" onClick={() => router.push('/')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+          <Home className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Home</span>
+        </button>
+        <button data-testid="bottomnav-chart" onClick={() => router.push('/terminal')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+          <CandlestickChart className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Chart</span>
+        </button>
+        <button data-testid="bottomnav-trade" onClick={() => router.push('/terminal?tab=trade')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+          <ArrowLeftRight className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Trade</span>
+        </button>
+        <button data-testid="bottomnav-wallet" className="flex-1 flex flex-col items-center justify-center gap-1 text-[#00FF66] transition">
+          <Wallet className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Wallet</span>
+        </button>
+      </nav>
     </div>
   )
 }
