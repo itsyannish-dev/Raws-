@@ -3,7 +3,15 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, fmtPrice } from '@/lib/rm'
-import { ArrowRight, Zap, LineChart, Wallet, ShieldCheck, X } from 'lucide-react'
+import { ArrowRight, Zap, LineChart, Wallet, ShieldCheck, X, ChevronDown, UserPlus, Banknote, CandlestickChart } from 'lucide-react'
+
+const FAQS = [
+  { q: 'How do I start trading on RAWMarkets?', a: 'Create a free account in under a minute, fund it instantly with a demo deposit, and start trading crypto and stocks with live market data.' },
+  { q: 'What markets can I trade?', a: 'You can trade 8 major cryptocurrencies (BTC, ETH, SOL, XRP and more) 24/7, plus 6 leading US stocks including Apple, Tesla and NVIDIA during market hours.' },
+  { q: 'What are the fees?', a: 'Zero commission. We charge a transparent 0.05% spread on every trade — that is it. No hidden costs, no monthly fees.' },
+  { q: 'How does leverage work?', a: 'You can trade with leverage from 1x up to 100x. Your required margin is the notional value divided by your leverage. Free margin is monitored in real time to protect your account.' },
+  { q: 'How do withdrawals work?', a: 'Withdrawal requests are reviewed by our team and typically processed within 24 hours. Your funds are always visible in your wallet with full transaction history.' },
+]
 
 const App = () => {
   const router = useRouter()
@@ -15,6 +23,7 @@ const App = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
+  const [openFaq, setOpenFaq] = useState(null)
 
   useEffect(() => {
     setLoggedIn(!!localStorage.getItem('rm_token'))
@@ -44,7 +53,7 @@ const App = () => {
       const res = await api.post(`/auth/${mode === 'login' ? 'login' : 'register'}`, payload)
       localStorage.setItem('rm_token', res.data.token)
       localStorage.setItem('rm_user', JSON.stringify(res.data.user))
-      router.push('/terminal')
+      router.push('/home')
     } catch (e2) {
       setError(e2.response?.data?.error || 'Something went wrong')
     } finally {
@@ -54,7 +63,7 @@ const App = () => {
 
   const openAuth = (m) => {
     if (loggedIn) {
-      router.push('/terminal')
+      router.push('/home')
       return
     }
     setMode(m)
@@ -69,18 +78,27 @@ const App = () => {
       {/* NAV */}
       <nav className="fixed top-0 inset-x-0 z-40 border-b border-white/5 bg-black/70 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 select-none">
-            <div className="h-7 w-7 rounded-md bg-[#00FF66] flex items-center justify-center">
-              <span className="text-black font-extrabold text-sm">R</span>
+          <div className="flex items-center gap-10">
+            <div className="flex items-center gap-2 select-none">
+              <div className="h-7 w-7 rounded-md bg-[#00FF66] flex items-center justify-center">
+                <span className="text-black font-extrabold text-sm">R</span>
+              </div>
+              <span className="font-bold tracking-tight text-lg">RAW<span className="text-[#00FF66]">MARKETS</span></span>
             </div>
-            <span className="font-bold tracking-tight text-lg">RAW<span className="text-[#00FF66]">MARKETS</span></span>
+            <div className="hidden lg:flex items-center gap-7 text-sm text-white/50">
+              <a href="#markets" className="hover:text-white transition">Markets</a>
+              <a href="#features" className="hover:text-white transition">Features</a>
+              <a href="#how" className="hover:text-white transition">How it works</a>
+              <a href="#pricing" className="hover:text-white transition">Pricing</a>
+              <a href="#faq" className="hover:text-white transition">FAQ</a>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button data-testid="nav-signin-btn" onClick={() => openAuth('login')} className="text-sm text-white/70 hover:text-white transition px-4 py-2">
-              {loggedIn ? 'Terminal' : 'Sign in'}
+              {loggedIn ? 'Open app' : 'Sign in'}
             </button>
             <button data-testid="nav-getstarted-btn" onClick={() => openAuth('register')} className="text-sm font-semibold bg-[#00FF66] text-black px-4 py-2 rounded-full hover:bg-[#00e65c] transition">
-              {loggedIn ? 'Open Terminal' : 'Get started'}
+              {loggedIn ? 'Launch app' : 'Get started'}
             </button>
           </div>
         </div>
@@ -136,12 +154,51 @@ const App = () => {
         )}
       </section>
 
+      {/* LIVE MARKETS TABLE */}
+      <section id="markets" className="py-24 px-6">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">Live markets.</h2>
+          <p className="text-white/40 text-center mt-3">Real prices, streaming right now.</p>
+          <div className="mt-10 rounded-2xl border border-white/5 overflow-hidden divide-y divide-white/5" data-testid="landing-markets-table">
+            {(symbols.slice(0, 8)).map((s) => {
+              const q = quotes[s.symbol]
+              const up = (q?.changePercent || 0) >= 0
+              return (
+                <div key={s.symbol} className="flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center text-[10px] font-bold ${s.type === 'crypto' ? 'bg-[#00FF66]/10 text-[#00FF66]' : 'bg-white/5 text-white/60'}`}>
+                      {s.symbol.slice(0, 2)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">{s.symbol}</div>
+                      <div className="text-[11px] text-white/35">{s.name}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <div className="text-sm font-mono">{q?.price ? fmtPrice(q.price, s.decimals) : '—'}</div>
+                      <div className={`text-[11px] font-mono ${up ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+                        {q?.changePercent != null ? `${up ? '+' : ''}${q.changePercent.toFixed(2)}%` : ''}
+                      </div>
+                    </div>
+                    <button onClick={() => openAuth('register')} className="hidden sm:block text-xs font-semibold border border-[#00FF66]/30 text-[#00FF66] px-4 py-1.5 rounded-full hover:bg-[#00FF66]/10 transition">
+                      Trade
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+            {symbols.length === 0 && <div className="px-5 py-12 text-center text-white/25">Loading markets…</div>}
+          </div>
+        </div>
+      </section>
+
       {/* FEATURES */}
-      <section className="py-24 px-6">
+      <section id="features" className="py-24 px-6 border-t border-white/5">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">Engineered for serious traders.</h2>
           <p className="text-white/40 text-center mt-3 max-w-xl mx-auto">Everything you need. Nothing you don't.</p>
-          <div className="grid md:grid-cols-4 gap-4 mt-14">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mt-14">
             {[
               { icon: LineChart, title: 'Live market data', desc: 'Streaming prices for crypto and US equities, tick by tick.' },
               { icon: Zap, title: 'Instant execution', desc: 'Market orders filled in milliseconds with transparent spreads.' },
@@ -152,6 +209,48 @@ const App = () => {
                 <f.icon className="h-6 w-6 text-[#00FF66] mb-4" />
                 <h3 className="font-semibold mb-2">{f.title}</h3>
                 <p className="text-sm text-white/40 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section id="how" className="py-24 px-6 border-t border-white/5">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">Up and running in a minute.</h2>
+          <div className="grid md:grid-cols-3 gap-4 mt-14">
+            {[
+              { icon: UserPlus, step: '01', title: 'Create your account', desc: 'Sign up with just your name, email and a password. No paperwork, no waiting.' },
+              { icon: Banknote, step: '02', title: 'Fund your wallet', desc: 'Demo deposits are credited instantly so you can start trading right away.' },
+              { icon: CandlestickChart, step: '03', title: 'Trade live markets', desc: 'Open positions with up to 100x leverage and watch your PnL update in real time.' },
+            ].map((s) => (
+              <div key={s.step} className="relative rounded-2xl border border-white/5 bg-white/[0.02] p-7">
+                <div className="text-[#00FF66]/20 font-extrabold text-4xl absolute top-5 right-6">{s.step}</div>
+                <s.icon className="h-6 w-6 text-[#00FF66] mb-4" />
+                <h3 className="font-semibold mb-2">{s.title}</h3>
+                <p className="text-sm text-white/40 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="pricing" className="py-24 px-6 border-t border-white/5">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">Simple, transparent pricing.</h2>
+          <p className="text-white/40 text-center mt-3">No commission. No monthly fees. No surprises.</p>
+          <div className="grid md:grid-cols-3 gap-4 mt-14">
+            {[
+              { v: '0.05%', l: 'Spread per trade', d: 'The only cost you pay. Applied transparently to bid and ask.' },
+              { v: '$0', l: 'Commission', d: 'Zero commission on all markets, deposits and account maintenance.' },
+              { v: '100x', l: 'Max leverage', d: 'Choose from 1x to 100x with real-time margin monitoring.' },
+            ].map((p) => (
+              <div key={p.l} className="rounded-2xl border border-[#00FF66]/15 bg-gradient-to-b from-[#00FF66]/[0.05] to-transparent p-8 text-center">
+                <div className="text-4xl font-extrabold text-[#00FF66]">{p.v}</div>
+                <div className="font-semibold mt-2">{p.l}</div>
+                <p className="text-sm text-white/40 mt-3 leading-relaxed">{p.d}</p>
               </div>
             ))}
           </div>
@@ -174,6 +273,30 @@ const App = () => {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section id="faq" className="py-24 px-6 border-t border-white/5">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">Frequently asked questions.</h2>
+          <div className="mt-12 space-y-3" data-testid="faq-list">
+            {FAQS.map((f, i) => (
+              <div key={i} className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
+                <button
+                  data-testid={`faq-q-${i}`}
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full flex items-center justify-between px-6 py-5 text-left font-medium hover:bg-white/[0.02] transition"
+                >
+                  <span>{f.q}</span>
+                  <ChevronDown className={`h-4 w-4 text-white/40 shrink-0 ml-4 transition-transform ${openFaq === i ? 'rotate-180' : ''}`} />
+                </button>
+                {openFaq === i && (
+                  <div className="px-6 pb-5 text-sm text-white/50 leading-relaxed">{f.a}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-24 px-6">
         <div className="mx-auto max-w-3xl text-center rounded-3xl border border-[#00FF66]/15 bg-gradient-to-b from-[#00FF66]/[0.06] to-transparent p-14">
@@ -186,10 +309,45 @@ const App = () => {
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t border-white/5 py-10 px-6">
-        <div className="mx-auto max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/30">
-          <span>© 2025 RAWMarkets. All rights reserved.</span>
-          <span>Trading involves risk. Demo environment — not financial advice.</span>
+      <footer className="border-t border-white/5 py-14 px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
+                <span className="font-bold text-sm">RAW<span className="text-[#00FF66]">MARKETS</span></span>
+              </div>
+              <p className="text-white/30 text-xs mt-4 leading-relaxed">Premium online broker for crypto and stocks. Live data, instant execution, real-time PnL.</p>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-white/30 mb-4">Product</div>
+              <div className="space-y-2.5 text-sm text-white/50">
+                <a href="#markets" className="block hover:text-white transition">Markets</a>
+                <a href="#features" className="block hover:text-white transition">Features</a>
+                <a href="#pricing" className="block hover:text-white transition">Pricing</a>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-white/30 mb-4">Company</div>
+              <div className="space-y-2.5 text-sm text-white/50">
+                <a href="#how" className="block hover:text-white transition">How it works</a>
+                <a href="#faq" className="block hover:text-white transition">FAQ</a>
+                <button onClick={() => openAuth('register')} className="block hover:text-white transition">Open account</button>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-white/30 mb-4">Legal</div>
+              <div className="space-y-2.5 text-sm text-white/50">
+                <span className="block">Terms of service</span>
+                <span className="block">Privacy policy</span>
+                <span className="block">Risk disclosure</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-white/30">
+            <span>© 2025 RAWMarkets. All rights reserved.</span>
+            <span>Trading involves risk. Demo environment — not financial advice.</span>
+          </div>
         </div>
       </footer>
 

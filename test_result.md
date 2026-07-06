@@ -166,6 +166,21 @@ backend:
         agent: "testing"
         comment: "✅ TESTED: POST /api/transactions/deposit {amount: 10000} returns 201, status=completed, balance updated to 10000. POST /api/transactions/withdraw {amount: 500} returns 201, status=pending, balance reduced by 500. GET /api/transactions returns list with deposit + withdrawal. Server logs confirm validation: 400 for negative/excessive deposits, 400 for withdraw more than balance."
 
+  - task: "Settings endpoints: PATCH /api/auth/profile, POST /api/auth/change-password"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added profile name update and password change (verifies current password). Used by new /settings page."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: PATCH /api/auth/profile updates user name (200), GET /api/auth/me reflects change. Empty/missing name returns 400 'Name is required'. No auth returns 401 'Unauthorized'. POST /api/auth/change-password validates current password (wrong password -> 401 'Current password is incorrect'), validates new password length (< 6 chars -> 400 'New password must be at least 6 characters'), successfully changes password (200 {success: true}). Login with old password after change returns 401, login with new password returns 200 with token. No auth returns 401. All validation and error handling working correctly. Test script: /app/test_settings_simple.py"
+
 frontend:
   - task: "Landing page + auth modal"
     implemented: true
@@ -218,3 +233,7 @@ agent_communication:
     message: "Phase 1 complete. Please test all backend APIs at {NEXT_PUBLIC_BASE_URL}/api. Test creds in /app/memory/test_credentials.md (trader@rawmarkets.com / Trader123!). Full flow: register new user -> login -> deposit -> place buy+sell orders (BTCUSD, lots 0.01, leverage 10) -> check account summary math (equity=balance+floating PnL, margin=notional/leverage) -> close position (PnL realized to balance) -> withdraw (pending status) -> edge cases (insufficient margin, invalid symbol/leverage, unauthorized access). NOTE: dev server may restart on memory threshold; retry once if connection refused."
   - agent: "testing"
     message: "Backend testing complete. All 4 high-priority backend tasks are WORKING. Tested with fresh user: auth flow (register/login/me), market data (symbols/quotes/candles/ws-config), full trading cycle (deposit → order → position → account summary → close → withdraw), and wallet transactions. All core functionality verified. Entry prices use correct spread (0.05%), margin calculations accurate, PnL computed correctly, balance updates precise. Server logs confirm all validation/error handling working (400/401/409 responses). Test script at /app/backend_test.py available for re-testing."
+  - agent: "main"
+    message: "Added 2 new settings endpoints: PATCH /api/auth/profile (update name) and POST /api/auth/change-password (verify current, update to new). Marked for testing."
+  - agent: "testing"
+    message: "Settings endpoints testing complete. Both endpoints WORKING. PATCH /api/auth/profile correctly updates user name, validates input (400 for empty/missing name), requires auth (401 without token). POST /api/auth/change-password correctly validates current password (401 if wrong), validates new password length (400 if < 6 chars), successfully updates password hash, and old password becomes invalid after change. All error handling and validation working as expected. Test script: /app/test_settings_simple.py"

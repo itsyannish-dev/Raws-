@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts'
 import { api, positionPnl, fmtMoney, fmtSignedMoney, fmtPrice, askPrice, bidPrice, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
+import { AppDrawer } from '@/components/app-nav'
 import { Wallet, LogOut, LayoutDashboard, X, Menu, Home, CandlestickChart, ArrowLeftRight } from 'lucide-react'
 
 const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d']
@@ -93,8 +94,10 @@ const App = () => {
     const token = localStorage.getItem('rm_token')
     if (!token) { router.replace('/'); return }
     try {
-      const tabParam = new URLSearchParams(window.location.search).get('tab')
-      if (tabParam === 'trade') setMobileTab('trade')
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('tab') === 'trade') setMobileTab('trade')
+      const symParam = params.get('symbol')
+      if (symParam && /^[A-Z]{2,10}$/.test(symParam)) setSelected(symParam)
     } catch (e) {}
     let ws = null
     let pollTimer, flushTimer, acctTimer
@@ -457,10 +460,10 @@ const App = () => {
       {/* MENU BAR */}
       <header className="h-14 shrink-0 border-b border-white/5 flex items-center justify-between px-4 bg-black z-30">
         <div className="flex items-center gap-3">
-          <button data-testid="hamburger-btn" onClick={() => setDrawerOpen(true)} className="md:hidden p-1.5 -ml-1.5 text-white/70 hover:text-white transition">
+          <button data-testid="hamburger-btn" onClick={() => setDrawerOpen(true)} className="p-1.5 -ml-1.5 text-white/70 hover:text-white transition">
             <Menu className="h-5 w-5" />
           </button>
-          <button onClick={() => router.push('/')} className="flex items-center gap-2">
+          <button onClick={() => router.push('/home')} className="flex items-center gap-2">
             <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
             <span className="font-bold text-sm">RAW<span className="text-[#00FF66]">MARKETS</span></span>
           </button>
@@ -499,9 +502,19 @@ const App = () => {
           {/* symbol header */}
           <div className="h-14 shrink-0 border-b border-white/5 flex items-center justify-between gap-2 px-4 overflow-x-auto">
             <div className="flex items-center gap-3 shrink-0">
-              <div>
+              <select
+                data-testid="mobile-symbol-select"
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+                className="md:hidden bg-white/5 border border-white/10 rounded-md text-sm font-bold px-2 py-1.5 focus:outline-none focus:border-[#00FF66]/50"
+              >
+                {(symbols.length ? symbols : [{ symbol: selected }]).map((s) => (
+                  <option key={s.symbol} value={s.symbol} className="bg-black">{s.symbol}</option>
+                ))}
+              </select>
+              <div className="hidden md:block">
                 <div className="font-bold" data-testid="selected-symbol">{selected}</div>
-                <div className="text-[11px] text-white/35 hidden sm:block">{selMeta.name}</div>
+                <div className="text-[11px] text-white/35">{selMeta.name}</div>
               </div>
               <div data-testid="selected-price" className={`text-lg sm:text-xl font-mono font-semibold ${(selQuote?.changePercent || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
                 {selQuote?.price ? fmtPrice(selQuote.price, selMeta.decimals) : '—'}
@@ -555,7 +568,7 @@ const App = () => {
 
       {/* MOBILE BOTTOM NAV */}
       <nav data-testid="mobile-bottom-nav" className="md:hidden h-16 shrink-0 border-t border-white/10 bg-black flex items-stretch z-30">
-        <button data-testid="bottomnav-home" onClick={() => router.push('/')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+        <button data-testid="bottomnav-home" onClick={() => router.push('/home')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
           <Home className="h-5 w-5" />
           <span className="text-[10px] font-medium">Home</span>
         </button>
@@ -573,29 +586,8 @@ const App = () => {
         </button>
       </nav>
 
-      {/* MARKET WATCH DRAWER (mobile) */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div data-testid="market-watch-drawer" className="absolute inset-y-0 left-0 w-72 bg-[#0a0a0a] border-r border-white/10 overflow-y-auto p-3">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <span className="font-semibold text-sm">Market Watch</span>
-              <button data-testid="drawer-close-btn" onClick={() => setDrawerOpen(false)} className="p-1.5 text-white/40 hover:text-white">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {marketWatchList('drawer')}
-            <div className="mt-4 border-t border-white/10 pt-3 space-y-1">
-              <button onClick={() => router.push('/dashboard')} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-white/60 hover:bg-white/5 hover:text-white transition">
-                <Wallet className="h-4 w-4" /> Wallet
-              </button>
-              <button onClick={() => logout(router)} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-white/60 hover:bg-white/5 hover:text-white transition">
-                <LogOut className="h-4 w-4" /> Sign out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* NAVIGATION DRAWER */}
+      <AppDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   )
 }

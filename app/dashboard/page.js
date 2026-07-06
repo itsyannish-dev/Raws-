@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, fmtMoney, fmtSignedMoney, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
-import { ArrowDownToLine, ArrowUpFromLine, CandlestickChart, LogOut, Wallet, Home, ArrowLeftRight } from 'lucide-react'
+import { AppDrawer, BottomNav } from '@/components/app-nav'
+import { ArrowDownToLine, ArrowUpFromLine, CandlestickChart, LogOut, Wallet, Menu } from 'lucide-react'
 
 const App = () => {
   const router = useRouter()
@@ -14,6 +15,7 @@ const App = () => {
   const [depositAmount, setDepositAmount] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [busy, setBusy] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -34,6 +36,19 @@ const App = () => {
   useEffect(() => {
     if (!localStorage.getItem('rm_token')) { router.replace('/'); return }
     refresh()
+    // deep-link: /dashboard?action=deposit|withdraw
+    try {
+      const action = new URLSearchParams(window.location.search).get('action')
+      if (action === 'deposit' || action === 'withdraw') {
+        setTimeout(() => {
+          const el = document.querySelector(`[data-testid="${action}-amount-input"]`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            el.focus()
+          }
+        }, 500)
+      }
+    } catch (e) {}
   }, [refresh, router])
 
   const deposit = async (e) => {
@@ -84,11 +99,16 @@ const App = () => {
     <div className="min-h-screen bg-black text-white">
       <Toaster position="top-right" theme="dark" richColors />
 
-      <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 sticky top-0 bg-black/80 backdrop-blur-xl z-10">
-        <button onClick={() => router.push('/')} className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
-          <span className="font-bold text-sm">RAW<span className="text-[#00FF66]">MARKETS</span></span>
-        </button>
+      <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 sticky top-0 bg-black/80 backdrop-blur-xl z-30">
+        <div className="flex items-center gap-3">
+          <button data-testid="hamburger-btn" onClick={() => setDrawerOpen(true)} className="p-1.5 -ml-1.5 text-white/70 hover:text-white transition">
+            <Menu className="h-5 w-5" />
+          </button>
+          <button onClick={() => router.push('/home')} className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
+            <span className="font-bold text-sm">RAW<span className="text-[#00FF66]">MARKETS</span></span>
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button data-testid="terminal-nav-btn" onClick={() => router.push('/terminal')} className="flex items-center gap-1.5 text-xs font-semibold bg-[#00FF66] text-black px-3.5 py-2 rounded-full hover:bg-[#00e65c] transition">
             <CandlestickChart className="h-3.5 w-3.5" /> Terminal
@@ -205,25 +225,8 @@ const App = () => {
         </div>
       </main>
 
-      {/* MOBILE BOTTOM NAV */}
-      <nav data-testid="mobile-bottom-nav" className="md:hidden fixed bottom-0 inset-x-0 h-16 border-t border-white/10 bg-black flex items-stretch z-30">
-        <button data-testid="bottomnav-home" onClick={() => router.push('/')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
-          <Home className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Home</span>
-        </button>
-        <button data-testid="bottomnav-chart" onClick={() => router.push('/terminal')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
-          <CandlestickChart className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Chart</span>
-        </button>
-        <button data-testid="bottomnav-trade" onClick={() => router.push('/terminal?tab=trade')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
-          <ArrowLeftRight className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Trade</span>
-        </button>
-        <button data-testid="bottomnav-wallet" className="flex-1 flex flex-col items-center justify-center gap-1 text-[#00FF66] transition">
-          <Wallet className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Wallet</span>
-        </button>
-      </nav>
+      <BottomNav active="wallet" />
+      <AppDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
   )
 }

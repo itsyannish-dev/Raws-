@@ -227,6 +227,32 @@ async function handleRoute(request, { params }) {
       return json({ user: sanitizeUser(user) })
     }
 
+    if (route === 'auth/profile' && method === 'PATCH') {
+      const user = await getAuthUser(request, database)
+      if (!user) return err('Unauthorized', 401)
+      const body = await request.json()
+      const name = String(body?.name || '').trim()
+      if (!name) return err('Name is required')
+      await database.collection('users').updateOne({ id: user.id }, { $set: { name } })
+      return json({ user: { ...sanitizeUser(user), name } })
+    }
+
+    if (route === 'auth/change-password' && method === 'POST') {
+      const user = await getAuthUser(request, database)
+      if (!user) return err('Unauthorized', 401)
+      const body = await request.json()
+      const { currentPassword, newPassword } = body || {}
+      if (!currentPassword || !newPassword) return err('Current and new password are required')
+      if (newPassword.length < 6) return err('New password must be at least 6 characters')
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+      if (!ok) return err('Current password is incorrect', 401)
+      await database.collection('users').updateOne(
+        { id: user.id },
+        { $set: { passwordHash: await bcrypt.hash(newPassword, 10) } }
+      )
+      return json({ success: true })
+    }
+
     // ===== MARKET (public) =====
     if (route === 'market/symbols' && method === 'GET') {
       return json({ symbols: SYMBOLS.map(({ symbol, name, type, decimals }) => ({ symbol, name, type, decimals })) })
