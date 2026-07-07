@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken'
 // ---------- CONFIG ----------
 const JWT_SECRET = process.env.JWT_SECRET || 'rawmarkets-dev-secret'
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY
-const SPREAD = 0.0005 // 0.05% total spread
+const DEFAULT_SPREAD = 0.0005 // 0.05% total spread
 const LEVERAGES = [1, 2, 5, 10, 20, 50, 100]
 
 const SYMBOLS = [
@@ -139,17 +139,56 @@ async function fetchCandles(meta, interval, limit = 300) {
   }
 }
 
-// ---------- TRADING ENGINE ----------
-const askPrice = (mid) => mid * (1 + SPREAD / 2)
-const bidPrice = (mid) => mid * (1 - SPREAD / 2)
+// ---------- SEED & SETTINGS ----------
+let adminSeeded = false
+async function ensureAdmin(database) {
+  if (adminSeeded) return
+  adminSeeded = true
+  try {
+    const email = (process.env.ADMIN_EMAIL || 'admin@rawmarkets.com').toLowerCase()
+    const existing = await database.collection('users').findOne({ email })
+    if (!existing) {
+      await database.collection('users').insertOne({
+        id: uuidv4(),
+        name: 'RAW Admin',
+        email,
+        passwordHash: await bcrypt.hash(process.env.ADMIN_PASSWORD || 'RawAdmin!2025', 10),
+        role: 'admin',
+        balance: 0,
+        createdAt: new Date().toISOString(),
+      })
+    } else if (existing.role !== 'admin') {
+      await database.collection('users').updateOne({ email }, { $set: { role: 'admin' } })
+    }
+  } catch (e) {
+    adminSeeded = false
+  }
+}
 
-function positionFloatingPnl(p, mid) {
-  const closeAt = p.side === 'buy' ? bidPrice(mid) : askPrice(mid)
+let settingsCache = { data: null, ts: 0 }
+async function getSettings(database) {
+  if (settingsCache.data && Date.now() - settingsCache.ts < 15000) return settingsCache.data
+  let s = await database.collection('settings').findOne({ id: 'platform' })
+  if (!s) {
+    s = { id: 'platform', spread: DEFAULT_SPREAD, maxLeverage: 100, tradingEnabled: true }
+    await database.collection('settings').insertOne({ ...s })
+  }
+  const clean = { spread: s.spread, maxLeverage: s.maxLeverage, tradingEnabled: s.tradingEnabled }
+  settingsCache = { data: clean, ts: Date.now() }
+  return clean
+}
+
+// ---------- TRADING ENGINE ----------
+const askPrice = (mid, spread = DEFAULT_SPREAD) => mid * (1 + spread / 2)
+const bidPrice = (mid, spread = DEFAULT_SPREAD) => mid * (1 - spread / 2)
+
+function positionFloatingPnl(p, mid, spread = DEFAULT_SPREAD) {
+  const closeAt = p.side === 'buy' ? bidPrice(mid, spread) : askPrice(mid, spread)
   const dir = p.side === 'buy' ? 1 : -1
   return (closeAt - p.entryPrice) * p.lots * dir
 }
 
-async function computeAccount(database, user) {
+async function computeAccount(database, user, spread = DEFAULT_SPREAD) {
   const open = await database.collection('positions').find({ userId: user.id, status: 'open' }).toArray()
   let floating = 0
   let usedMargin = 0
@@ -158,7 +197,7 @@ async function computeAccount(database, user) {
   for (const p of open) {
     usedMargin += p.margin
     const q = quotes[p.symbol]
-    if (q) floating += positionFloatingPnl(p, q.price)
+    if (q) floating += positionFloatingPnl(p, q.price, spread)
   }
   const balance = user.balance || 0
   const equity = balance + floating
@@ -181,6 +220,7 @@ async function handleRoute(request, { params }) {
 
   try {
     const database = await getDb()
+    await ensureAdmin(database)
 
     // ===== ROOT =====
     if ((route === '' || route === 'root') && method === 'GET') {
@@ -263,7 +303,8 @@ async function handleRoute(request, { params }) {
       const qs = url.searchParams.get('symbols')
       const list = qs ? qs.split(',').map((s) => s.trim()).filter(Boolean) : SYMBOLS.map((s) => s.symbol)
       const quotes = await fetchQuotes(list)
-      return json({ quotes, spread: SPREAD })
+      const settings = await getSettings(database)
+      return json({ quotes, spread: settings.spread })
     }
 
     if (route === 'market/candles' && method === 'GET') {
@@ -295,7 +336,8 @@ async function handleRoute(request, { params }) {
     if (route === 'account/summary' && method === 'GET') {
       const user = await getAuthUser(request, database)
       if (!user) return err('Unauthorized', 401)
-      const account = await computeAccount(database, user)
+      const settings = await getSettings(database)
+      const account = await computeAccount(database, user, settings.spread)
       return json({ account })
     }
 
@@ -313,17 +355,21 @@ async function handleRoute(request, { params }) {
       const lev = Number(leverage)
       if (!LEVERAGES.includes(lev)) return err('Invalid leverage')
 
+      const settings = await getSettings(database)
+      if (!settings.tradingEnabled) return err('Trading is temporarily disabled by the platform', 403)
+      if (lev > settings.maxLeverage) return err(`Maximum allowed leverage is ${settings.maxLeverage}x`)
+
       let quote
       try {
         quote = await fetchQuote(meta)
       } catch (e) {
         return err('Market price unavailable, try again', 502)
       }
-      const entryPrice = side === 'buy' ? askPrice(quote.price) : bidPrice(quote.price)
+      const entryPrice = side === 'buy' ? askPrice(quote.price, settings.spread) : bidPrice(quote.price, settings.spread)
       const notional = lotsNum * entryPrice
       const margin = notional / lev
 
-      const account = await computeAccount(database, user)
+      const account = await computeAccount(database, user, settings.spread)
       if (margin > account.freeMargin + 1e-9) {
         return err(`Insufficient free margin. Required: $${margin.toFixed(2)}, available: $${Math.max(0, account.freeMargin).toFixed(2)}`)
       }
@@ -372,13 +418,14 @@ async function handleRoute(request, { params }) {
       if (!position) return err('Position not found', 404)
       if (position.status !== 'open') return err('Position already closed')
       const meta = symMeta(position.symbol)
+      const settings = await getSettings(database)
       let quote
       try {
         quote = await fetchQuote(meta)
       } catch (e) {
         return err('Market price unavailable, try again', 502)
       }
-      const closePrice = position.side === 'buy' ? bidPrice(quote.price) : askPrice(quote.price)
+      const closePrice = position.side === 'buy' ? bidPrice(quote.price, settings.spread) : askPrice(quote.price, settings.spread)
       const dir = position.side === 'buy' ? 1 : -1
       const pnl = (closePrice - position.entryPrice) * position.lots * dir
       const closedAt = new Date().toISOString()
@@ -424,7 +471,8 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       const amount = Number(body?.amount)
       if (!isFinite(amount) || amount <= 0) return err('Invalid amount')
-      const account = await computeAccount(database, user)
+      const wdSettings = await getSettings(database)
+      const account = await computeAccount(database, user, wdSettings.spread)
       if (amount > account.freeMargin || amount > account.balance) {
         return err(`Insufficient available funds. Available: $${Math.max(0, Math.min(account.freeMargin, account.balance)).toFixed(2)}`)
       }
@@ -454,6 +502,161 @@ async function handleRoute(request, { params }) {
         .limit(100)
         .toArray()
       return json({ transactions: list })
+    }
+
+    // ===== ADMIN =====
+    if (path[0] === 'admin') {
+      const admin = await getAuthUser(request, database)
+      if (!admin) return err('Unauthorized', 401)
+      if (admin.role !== 'admin') return err('Forbidden: admin access required', 403)
+
+      // GET /api/admin/stats
+      if (route === 'admin/stats' && method === 'GET') {
+        const [userCount, balanceAgg, openPositions, pendingWd, depositAgg, withdrawAgg] = await Promise.all([
+          database.collection('users').countDocuments({}),
+          database.collection('users').aggregate([{ $group: { _id: null, total: { $sum: '$balance' } } }]).toArray(),
+          database.collection('positions').countDocuments({ status: 'open' }),
+          database.collection('transactions').find({ type: 'withdrawal', status: 'pending' }).toArray(),
+          database.collection('transactions').aggregate([{ $match: { type: 'deposit', status: 'completed' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]).toArray(),
+          database.collection('transactions').aggregate([{ $match: { type: 'withdrawal', status: 'approved' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]).toArray(),
+        ])
+        return json({
+          stats: {
+            totalUsers: userCount,
+            totalBalance: balanceAgg[0]?.total || 0,
+            openPositions,
+            pendingWithdrawals: pendingWd.length,
+            pendingWithdrawalAmount: pendingWd.reduce((s, t) => s + t.amount, 0),
+            totalDeposited: depositAgg[0]?.total || 0,
+            totalWithdrawn: withdrawAgg[0]?.total || 0,
+          },
+        })
+      }
+
+      // GET /api/admin/users?search=
+      if (route === 'admin/users' && method === 'GET') {
+        const url = new URL(request.url)
+        const search = url.searchParams.get('search')
+        const query = search
+          ? { $or: [{ email: { $regex: search, $options: 'i' } }, { name: { $regex: search, $options: 'i' } }] }
+          : {}
+        const users = await database
+          .collection('users')
+          .find(query, { projection: { _id: 0, passwordHash: 0 } })
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .toArray()
+        return json({ users })
+      }
+
+      // POST /api/admin/users/{id}/adjust-balance
+      if (path[1] === 'users' && path[3] === 'adjust-balance' && method === 'POST') {
+        const target = await database.collection('users').findOne({ id: path[2] })
+        if (!target) return err('User not found', 404)
+        const body = await request.json()
+        const amount = Number(body?.amount)
+        if (!isFinite(amount) || amount === 0) return err('Invalid amount')
+        if ((target.balance || 0) + amount < 0) return err(`Adjustment would make balance negative. Current balance: $${(target.balance || 0).toFixed(2)}`)
+        await database.collection('users').updateOne({ id: target.id }, { $inc: { balance: amount } })
+        const tx = {
+          id: uuidv4(),
+          userId: target.id,
+          type: 'adjustment',
+          amount: Math.abs(amount),
+          direction: amount > 0 ? 'credit' : 'debit',
+          note: String(body?.note || '').slice(0, 200),
+          method: 'admin',
+          status: 'completed',
+          adminId: admin.id,
+          createdAt: new Date().toISOString(),
+        }
+        await database.collection('transactions').insertOne(tx)
+        const updated = await database.collection('users').findOne({ id: target.id }, { projection: { _id: 0, passwordHash: 0 } })
+        const { _id, ...cleanTx } = tx
+        return json({ user: updated, transaction: cleanTx })
+      }
+
+      // GET /api/admin/transactions?status=&type=
+      if (route === 'admin/transactions' && method === 'GET') {
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status')
+        const type = url.searchParams.get('type')
+        const query = {}
+        if (status) query.status = status
+        if (type) query.type = type
+        const txs = await database
+          .collection('transactions')
+          .find(query, { projection: { _id: 0 } })
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .toArray()
+        const userIds = [...new Set(txs.map((t) => t.userId))]
+        const users = await database.collection('users').find({ id: { $in: userIds } }, { projection: { _id: 0, id: 1, name: 1, email: 1 } }).toArray()
+        const userMap = Object.fromEntries(users.map((u) => [u.id, u]))
+        return json({ transactions: txs.map((t) => ({ ...t, user: userMap[t.userId] || null })) })
+      }
+
+      // POST /api/admin/transactions/{id}/approve | reject
+      if (path[1] === 'transactions' && (path[3] === 'approve' || path[3] === 'reject') && method === 'POST') {
+        const tx = await database.collection('transactions').findOne({ id: path[2] })
+        if (!tx) return err('Transaction not found', 404)
+        if (tx.type !== 'withdrawal') return err('Only withdrawals can be approved or rejected')
+        if (tx.status !== 'pending') return err(`Transaction is already ${tx.status}`)
+        const newStatus = path[3] === 'approve' ? 'approved' : 'rejected'
+        await database.collection('transactions').updateOne(
+          { id: tx.id },
+          { $set: { status: newStatus, processedAt: new Date().toISOString(), adminId: admin.id } }
+        )
+        if (newStatus === 'rejected') {
+          // refund the held amount
+          await database.collection('users').updateOne({ id: tx.userId }, { $inc: { balance: tx.amount } })
+        }
+        return json({ transaction: { ...tx, _id: undefined, status: newStatus } })
+      }
+
+      // GET /api/admin/positions?status=
+      if (route === 'admin/positions' && method === 'GET') {
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status') || 'open'
+        const list = await database
+          .collection('positions')
+          .find({ status }, { projection: { _id: 0 } })
+          .sort({ openedAt: -1 })
+          .limit(200)
+          .toArray()
+        const userIds = [...new Set(list.map((p) => p.userId))]
+        const users = await database.collection('users').find({ id: { $in: userIds } }, { projection: { _id: 0, id: 1, name: 1, email: 1 } }).toArray()
+        const userMap = Object.fromEntries(users.map((u) => [u.id, u]))
+        return json({ positions: list.map((p) => ({ ...p, user: userMap[p.userId] || null })) })
+      }
+
+      // GET / PUT /api/admin/settings
+      if (route === 'admin/settings' && method === 'GET') {
+        const settings = await getSettings(database)
+        return json({ settings })
+      }
+      if (route === 'admin/settings' && method === 'PUT') {
+        const body = await request.json()
+        const updates = {}
+        if (body.spread != null) {
+          const sp = Number(body.spread)
+          if (!isFinite(sp) || sp < 0 || sp > 0.02) return err('Spread must be between 0 and 0.02 (2%)')
+          updates.spread = sp
+        }
+        if (body.maxLeverage != null) {
+          const ml = Number(body.maxLeverage)
+          if (!LEVERAGES.includes(ml)) return err(`Max leverage must be one of: ${LEVERAGES.join(', ')}`)
+          updates.maxLeverage = ml
+        }
+        if (body.tradingEnabled != null) {
+          updates.tradingEnabled = !!body.tradingEnabled
+        }
+        if (Object.keys(updates).length === 0) return err('Nothing to update')
+        await database.collection('settings').updateOne({ id: 'platform' }, { $set: updates }, { upsert: true })
+        settingsCache = { data: null, ts: 0 }
+        const settings = await getSettings(database)
+        return json({ settings })
+      }
     }
 
     return err(`Route not found: ${method} /api/${route}`, 404)

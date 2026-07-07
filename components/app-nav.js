@@ -1,8 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Home, CandlestickChart, LineChart, Wallet, ArrowDownToLine, ArrowUpFromLine, Settings, LogOut, X, ArrowLeftRight } from 'lucide-react'
+import { Home, CandlestickChart, LineChart, Wallet, ArrowDownToLine, ArrowUpFromLine, Settings, LogOut, X, ArrowLeftRight, ShieldCheck } from 'lucide-react'
 import { logout } from '@/lib/rm'
 
 const MENU_ITEMS = [
@@ -17,11 +17,21 @@ const MENU_ITEMS = [
 
 export function AppDrawer({ open, onClose }) {
   const router = useRouter()
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('rm_user') || '{}')
+      setIsAdmin(u.role === 'admin')
+    } catch (e) {}
+  }, [open])
   if (!open) return null
   const go = (path) => {
     onClose()
     router.push(path)
   }
+  const items = isAdmin
+    ? [...MENU_ITEMS, { label: 'Admin panel', icon: ShieldCheck, path: '/admin', testid: 'menu-admin' }]
+    : MENU_ITEMS
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -36,7 +46,7 @@ export function AppDrawer({ open, onClose }) {
           </button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {MENU_ITEMS.map((item) => (
+          {items.map((item) => (
             <button
               key={item.label}
               data-testid={item.testid}

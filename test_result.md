@@ -237,3 +237,20 @@ agent_communication:
     message: "Added 2 new settings endpoints: PATCH /api/auth/profile (update name) and POST /api/auth/change-password (verify current, update to new). Marked for testing."
   - agent: "testing"
     message: "Settings endpoints testing complete. Both endpoints WORKING. PATCH /api/auth/profile correctly updates user name, validates input (400 for empty/missing name), requires auth (401 without token). POST /api/auth/change-password correctly validates current password (401 if wrong), validates new password length (400 if < 6 chars), successfully updates password hash, and old password becomes invalid after change. All error handling and validation working as expected. Test script: /app/test_settings_simple.py"
+  - agent: "testing"
+    message: "Admin endpoints testing complete. All admin functionality WORKING. Access control enforced (401 without token, 403 for non-admin). Stats endpoint returns all required metrics. Users list works with search, no passwordHash exposed. Balance adjustment creates transactions, validates negative/zero amounts. Withdrawal approval/rejection flow correct (approve keeps deduction, reject refunds). Positions list includes user info. Settings GET/PUT working with enforcement (maxLeverage and tradingEnabled validated in order creation). Invalid settings correctly rejected. Settings restored to defaults (spread=0.0005, maxLeverage=100, tradingEnabled=true). Test script: /app/backend_test_admin.py"
+
+  - task: "Admin: stats, users, adjust-balance, withdrawals approve/reject, positions, platform settings"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin seeded (admin@rawmarkets.com / RawAdmin!2025, role admin). Endpoints under /api/admin/*: stats, users?search=, users/{id}/adjust-balance, transactions (withdrawal filters), transactions/{id}/approve|reject (reject refunds), positions, settings GET/PUT (spread, maxLeverage, tradingEnabled wired into trading engine). Non-admin gets 403."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All admin endpoints working correctly. (1) Access control: all /api/admin/* endpoints return 401 without token, 403 with regular user token. (2) GET /api/admin/stats returns all required fields (totalUsers: 22, totalBalance: $257,513.97, openPositions: 13, pendingWithdrawals: 5/$4,000, totalDeposited: $260,000, totalWithdrawn: $0). (3) GET /api/admin/users returns 22 users without passwordHash, search filter correctly finds trader user. (4) POST /api/admin/users/{id}/adjust-balance: +$500 credit creates adjustment transaction visible in user's list, -$200 debit works, -$1000 correctly rejected (400 would go negative), amount=0 correctly rejected (400). (5) Withdrawal flow: deposit $1000 + withdraw $400 creates pending tx with balance $600, admin GET /api/admin/transactions?type=withdrawal&status=pending shows it with user info, approve keeps balance at $600, second withdrawal rejection refunds balance correctly, re-approval of approved tx correctly rejected (400). (6) GET /api/admin/positions?status=open returns 13 positions with user email attached. (7) Settings: GET returns current settings, PUT maxLeverage=20 enforced (order with leverage 50 rejected with 'Maximum allowed leverage is 20x'), PUT tradingEnabled=false enforced (order rejected with 403 'trading disabled'), settings restored to spread=0.0005/maxLeverage=100/tradingEnabled=true, invalid spread=0.5 correctly rejected (400). Test script: /app/backend_test_admin.py"

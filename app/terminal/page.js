@@ -30,6 +30,7 @@ const App = () => {
   const [chartError, setChartError] = useState('')
   const [mobileTab, setMobileTab] = useState('chart')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [spread, setSpread] = useState(0.0005)
 
   const chartContainerRef = useRef(null)
   const chartApiRef = useRef(null)
@@ -130,6 +131,7 @@ const App = () => {
       }
       try {
         const qRes = await api.get('/market/quotes')
+        if (qRes.data.spread) setSpread(qRes.data.spread)
         applyQuotes(qRes.data.quotes)
       } catch (e) {}
       refreshPositions()
@@ -161,6 +163,7 @@ const App = () => {
       pollTimer = setInterval(async () => {
         try {
           const r = await api.get('/market/quotes')
+          if (r.data.spread) setSpread(r.data.spread)
           applyQuotes(r.data.quotes)
         } catch (e) {}
       }, 12000)
@@ -223,8 +226,8 @@ const App = () => {
   // ---------- derived live account ----------
   const floatingPnl = useMemo(() => positions.reduce((sum, p) => {
     const q = quotes[p.symbol]
-    return sum + (q?.price ? positionPnl(p, q.price) : 0)
-  }, 0), [positions, quotes])
+    return sum + (q?.price ? positionPnl(p, q.price, spread) : 0)
+  }, 0), [positions, quotes, spread])
   const usedMargin = useMemo(() => positions.reduce((s, p) => s + p.margin, 0), [positions])
   const equity = balance + floatingPnl
   const freeMargin = equity - usedMargin
@@ -317,11 +320,11 @@ const App = () => {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-[#ff3b5c]/5 border border-[#ff3b5c]/15 p-2.5 text-center">
             <div className="text-[10px] text-white/35">SELL (Bid)</div>
-            <div className="font-mono text-sm text-[#ff3b5c]" data-testid="sell-price">{midPrice ? fmtPrice(bidPrice(midPrice), selMeta.decimals) : '—'}</div>
+            <div className="font-mono text-sm text-[#ff3b5c]" data-testid="sell-price">{midPrice ? fmtPrice(bidPrice(midPrice, spread), selMeta.decimals) : '—'}</div>
           </div>
           <div className="rounded-lg bg-[#00FF66]/5 border border-[#00FF66]/15 p-2.5 text-center">
             <div className="text-[10px] text-white/35">BUY (Ask)</div>
-            <div className="font-mono text-sm text-[#00FF66]" data-testid="buy-price">{midPrice ? fmtPrice(askPrice(midPrice), selMeta.decimals) : '—'}</div>
+            <div className="font-mono text-sm text-[#00FF66]" data-testid="buy-price">{midPrice ? fmtPrice(askPrice(midPrice, spread), selMeta.decimals) : '—'}</div>
           </div>
         </div>
       </div>
@@ -359,7 +362,7 @@ const App = () => {
         <div className="flex justify-between"><span className="text-white/35">Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(lotsNum * midPrice)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Required margin</span><span className="font-mono" data-testid="order-margin">{fmtMoney(requiredMargin)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Free margin</span><span className="font-mono">{fmtMoney(freeMargin)}</span></div>
-        <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">0.05%</span></div>
+        <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">{(spread * 100).toFixed(2)}%</span></div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -406,9 +409,9 @@ const App = () => {
           <tbody className="font-mono">
             {tab === 'open' && positions.map((p) => {
               const q = quotes[p.symbol]
-              const pnl = q?.price ? positionPnl(p, q.price) : 0
+              const pnl = q?.price ? positionPnl(p, q.price, spread) : 0
               const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
-              const cur = q?.price ? (p.side === 'buy' ? bidPrice(q.price) : askPrice(q.price)) : null
+              const cur = q?.price ? (p.side === 'buy' ? bidPrice(q.price, spread) : askPrice(q.price, spread)) : null
               return (
                 <tr key={p.id} data-testid={`position-row-${p.id}`} className="border-t border-white/5">
                   <td className="py-2 font-semibold font-sans">{p.symbol}</td>
