@@ -219,7 +219,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 3
+  test_sequence: 4
   run_ui: false
 
 test_plan:
@@ -241,8 +241,12 @@ agent_communication:
     message: "Admin endpoints testing complete. All admin functionality WORKING. Access control enforced (401 without token, 403 for non-admin). Stats endpoint returns all required metrics. Users list works with search, no passwordHash exposed. Balance adjustment creates transactions, validates negative/zero amounts. Withdrawal approval/rejection flow correct (approve keeps deduction, reject refunds). Positions list includes user info. Settings GET/PUT working with enforcement (maxLeverage and tradingEnabled validated in order creation). Invalid settings correctly rejected. Settings restored to defaults (spread=0.0005, maxLeverage=100, tradingEnabled=true). Test script: /app/backend_test_admin.py"
   - agent: "main"
     message: "Added 7 forex pairs (EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF). Server keeps a Finnhub WS (OANDA) singleton feeding live prices; Yahoo provides daily change + fallback. Candles via Yahoo. contractSize=100000/lot; notional USD = units*price (XXXUSD) or units (USDXXX); PnL converted from quote currency to USD for USD-base pairs. Positions now store contractSize + quoteCurrency. Please test forex functionality."
+  - agent: "main"
+    message: "MAJOR BACKEND REWRITE completed: (1) NOWPayments crypto deposits: GET /api/payments/currencies (popular pay currencies), POST /api/transactions/deposit now requires {amount, payCurrency} and creates a real NOWPayments payment (returns payAddress, payAmount, paymentId, status=waiting_payment). GET /api/transactions/deposit/{id}/status polls NOWPayments and maps status (finished/confirmed->pending for admin approval; failed/expired->failed). Admin approve credits balance. (2) Withdrawals now require walletAddress (min 15 chars) + optional network, status=pending for admin. (3) Category-based max leverage: crypto 1:10, forex 1:100, metal 1:20, index 1:50, stock 1:10 — enforced in POST /api/orders (error if leverage > category max). maxLeverage now included per-symbol in GET /api/market/symbols. (4) Dynamic spread in PIPS: settings.spreadPips (default 1), actual spread randomized between 1x-2x base pips per quote; quotes now include bid/ask/spreadPips/pipSize. Admin PUT /api/admin/settings accepts spreadPips (0.1-10) and tradingEnabled (maxLeverage setting REMOVED - replaced by category rules). (5) New symbols: XAUUSD/XAGUSD (metal), US500/US100/US30 (index), 6 new forex crosses, DOGE/ADA/LINK crypto, AMZN/GOOGL stocks — 32 symbols total. Please test all of this. NOTE: NOWPayments API key is real - creating deposits hits the live API (no funds move unless someone pays the address). Test creds: trader@rawmarkets.com / Trader123!, admin@rawmarkets.com / RawAdmin!2025."
   - agent: "testing"
     message: "Forex testing complete. All forex functionality WORKING. Tested: (1) 21 symbols total with 7 forex pairs having correct metadata (contractSize=100000, proper quote currencies). (2) Live quotes for EURUSD/USDJPY/GBPUSD with valid price ranges and changePercent. (3) Candles for EURUSD 1h/1d and USDJPY 15m in ascending order. (4) Full forex trading cycle with fresh user: EURUSD order (contractSize=100000, quoteCurrency=USD, entryPrice≈mid*1.00025, notional=$1,142.99, margin=$114.30), USDJPY order (notional=$1,000 exactly for USD-base, margin=$100), account summary shows correct usedMargin sum and equity calculation, both positions closed with small PnL within expected range, balance updated by exact PnL sum. (5) Oversized order correctly rejected with insufficient margin error. (6) Crypto regression test passed. Test script: /app/backend_test_forex.py"
+  - agent: "testing"
+    message: "MAJOR REWRITE TESTING COMPLETE - ALL FEATURES WORKING ✅. Comprehensive test of 7 new backend features: (1) SYMBOLS & CATEGORIES: GET /api/market/symbols returns exactly 32 symbols with correct maxLeverage per category (crypto=10, forex=100, metal=20, index=50, stock=10). All new symbols verified: XAUUSD/XAGUSD (metals), US500/US100/US30 (indices), EURGBP/EURJPY/GBPJPY/EURCHF/AUDJPY/EURAUD (forex crosses), DOGEUSD/ADAUSD/LINKUSD (crypto), AMZN/GOOGL (stocks). (2) DYNAMIC PIP SPREAD: GET /api/market/quotes returns bid/ask/spreadPips/pipSize for each symbol, spread calculation accurate (ask-bid ≈ spreadPips * pipSize), spreadPips randomized between 1x-2x base (tested: BTCUSD=1.32, EURUSD=1.43, XAUUSD=1.55). (3) CATEGORY LEVERAGE ENFORCEMENT: Fresh user funded via admin adjust-balance. BTCUSD leverage 20 correctly rejected (400 'Maximum leverage for crypto is 1:10'), EURUSD leverage 100 accepted, XAUUSD leverage 50 rejected (400 'Maximum leverage for metal is 1:20'), XAUUSD leverage 20 accepted, US500 leverage 100 rejected (400 'Maximum leverage for index is 1:50'), US500 leverage 50 accepted. All positions closed with PnL applied. (4) NOWPAYMENTS DEPOSITS: GET /api/payments/currencies returns 10 currencies. POST /api/transactions/deposit {amount: 50, payCurrency: 'usdttrc20'} creates real NOWPayments payment (payAddress, payAmount=50.050059, paymentId=6350514825, status=waiting_payment). GET /api/transactions/deposit/{id}/status polls status (paymentStatus='waiting'). Validation working: amount < 10 rejected, missing payCurrency rejected. Live API integration working. (5) WITHDRAWALS WITH WALLET: POST /api/transactions/withdraw without walletAddress rejected (400). With walletAddress creates pending withdrawal, balance deducted. Admin reject refunds balance, admin approve keeps deduction. (6) ADMIN SETTINGS: GET /api/admin/settings returns spreadPips/tradingEnabled/categoryLeverage. PUT {spreadPips: 2} works, PUT {spreadPips: 20} rejected (400, out of range 0.1-10). PUT {tradingEnabled: false} blocks orders (403 'Trading is temporarily disabled'). Settings restored. (7) REGRESSION: Auth flow (register/login/me), account summary math (equity=balance+floatingPnl, freeMargin=equity-usedMargin), positions, admin stats (includes pendingDeposits/awaitingPaymentDeposits) all working. Test script: /app/backend_test_rewrite.py. ALL 7/7 TESTS PASSED."
 
   - task: "Admin: stats, users, adjust-balance, withdrawals approve/reject, positions, platform settings"
     implemented: true
@@ -273,3 +277,78 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Complete forex functionality verified. (1) GET /api/market/symbols returns 21 symbols: 7 forex (EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF) with type='forex', contractSize=100000, correct quote currencies (USD for EURUSD/GBPUSD/AUDUSD/NZDUSD; JPY/CAD/CHF for USD-base pairs); crypto/stocks have contractSize=1. (2) GET /api/market/quotes?symbols=EURUSD,USDJPY,GBPUSD returns valid prices (EURUSD=1.143 in range 1.0-1.3, USDJPY=162.217 in range 130-180), changePercent present; called twice with 6s gap, both succeeded. (3) GET /api/market/candles works for EURUSD 1h (300 candles), EURUSD 1d (260 candles), USDJPY 15m (300 candles), all in ascending order with proper OHLC structure. (4) FOREX TRADING MATH with fresh user (deposit $10,000): EURUSD buy 0.01 lots leverage 10 -> position has contractSize=100000, quoteCurrency='USD', entryPrice=1.142985675 (≈ mid*1.00025), notional=$1,142.99 (≈ 0.01*100000*entryPrice), margin=$114.30 (notional/10). USDJPY buy 0.01 lots leverage 10 -> notional=$1,000 exactly (USD-base), margin=$100. GET /api/account/summary -> usedMargin=$214.30 (sum of both margins), equity=$9,998.93 (balance + floatingPnl). Closed both positions -> EURUSD pnl=-$0.57, USDJPY pnl=-$0.50 (both within -$20 to +$20 for immediate close), balance updated by exact pnl sum to $9,998.93. Oversized order (10 lots leverage 1 EURUSD) correctly rejected with 400 'Insufficient free margin. Required: $1,143,040.69, available: $9,998.60'. (5) REGRESSION: crypto order BTCUSD 0.01 lots leverage 10 works, margin=$65.34 (0.01*entryPrice/10), close works with pnl=-$0.33. All forex functionality working correctly. Test script: /app/backend_test_forex.py"
+
+  - task: "Major Rewrite: 32 symbols with category-based leverage (crypto 1:10, forex 1:100, metal 1:20, index 1:50, stock 1:10)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "MAJOR BACKEND REWRITE: Added 32 symbols total (8 crypto, 13 forex, 2 metals, 3 indices, 6 stocks). Category-based max leverage enforced in POST /api/orders. maxLeverage included per-symbol in GET /api/market/symbols. New symbols: XAUUSD/XAGUSD (metal), US500/US100/US30 (index), EURGBP/EURJPY/GBPJPY/EURCHF/AUDJPY/EURAUD (forex crosses), DOGEUSD/ADAUSD/LINKUSD (crypto), AMZN/GOOGL (stocks)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/market/symbols returns exactly 32 symbols with correct maxLeverage per category (crypto=10, forex=100, metal=20, index=50, stock=10). All required new symbols present: XAUUSD/XAGUSD (type=metal, maxLeverage=20), US500/US100/US30 (type=index, maxLeverage=50), EURGBP/EURJPY/GBPJPY/EURCHF/AUDJPY/EURAUD (forex crosses, maxLeverage=100), DOGEUSD/ADAUSD/LINKUSD (crypto, maxLeverage=10), AMZN/GOOGL (stocks, maxLeverage=10). Each symbol includes pipSize, contractSize, quote fields. Category leverage enforcement tested with fresh user: BTCUSD leverage 20 rejected (400 'Maximum leverage for crypto is 1:10'), EURUSD leverage 100 accepted, XAUUSD leverage 50 rejected (400 'Maximum leverage for metal is 1:20'), XAUUSD leverage 20 accepted, US500 leverage 100 rejected (400 'Maximum leverage for index is 1:50'), US500 leverage 50 accepted. All positions closed successfully with PnL applied. Test script: /app/backend_test_rewrite.py"
+
+  - task: "Dynamic pip-based spread: quotes include bid/ask/spreadPips/pipSize, spread randomized 1x-2x base pips"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Dynamic spread in PIPS: settings.spreadPips (default 1), actual spread randomized between 1x-2x base pips per quote. Quotes now include bid/ask/spreadPips/pipSize where bid < price < ask, and (ask-bid) ≈ spreadPips * pipSize. Response includes baseSpreadPips."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/market/quotes?symbols=BTCUSD,EURUSD,XAUUSD returns quotes with bid/ask/spreadPips/pipSize. baseSpreadPips=1 returned. For each symbol: bid < price < ask verified, spread calculation (ask-bid) ≈ spreadPips * pipSize accurate within 10% tolerance. spreadPips values between 1.0 and 2.0 (1x-2x base). Examples: BTCUSD spreadPips=1.32, EURUSD spreadPips=1.43, XAUUSD spreadPips=1.55. All spread math correct. Test script: /app/backend_test_rewrite.py"
+
+  - task: "NOWPayments crypto deposits: GET /api/payments/currencies, POST /api/transactions/deposit with payCurrency, status polling"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "NOWPayments crypto deposits: GET /api/payments/currencies returns popular pay currencies. POST /api/transactions/deposit requires {amount, payCurrency}, creates real NOWPayments payment (returns payAddress, payAmount, paymentId, status=waiting_payment). GET /api/transactions/deposit/{id}/status polls NOWPayments and maps status (finished/confirmed->pending for admin approval; failed/expired->failed). Admin approve credits balance. NOTE: NOWPayments API key is real - creating deposits hits live API (no funds move unless someone pays the address)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/payments/currencies returns 10 currencies (btc, eth, usdttrc20, etc.) with code/label. POST /api/transactions/deposit {amount: 50, payCurrency: 'usdttrc20'} returns 201 with transaction containing payAddress (TWfLdph4qtBaUkG1xgtEHxKk4FmVAo1aAK), payAmount (50.050059), paymentId (6350514825), status=waiting_payment. GET /api/transactions/deposit/{id}/status returns transaction with paymentStatus='waiting' (mapped to status=waiting_payment). Validation working: amount < 10 returns 400 'Minimum deposit is $10', missing payCurrency returns 400 'Select the cryptocurrency you will pay with'. Live NOWPayments API integration working correctly. Test script: /app/backend_test_rewrite.py"
+
+  - task: "Withdrawals require walletAddress (min 15 chars), admin approve/reject flow"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Withdrawals now require walletAddress (min 15 chars) + optional network. POST /api/transactions/withdraw {amount, walletAddress, network} creates status=pending for admin approval. Admin reject refunds balance."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/transactions/withdraw without walletAddress returns 400 'A valid crypto wallet address is required'. POST with {amount: 100, walletAddress: 'TXYZabc1234567890abcdefghijklmnop', network: 'TRC20'} returns 201, status=pending, balance deducted from $1000 to $900. Admin POST /api/admin/transactions/{id}/reject returns 200, balance refunded to $1000. Admin POST /api/admin/transactions/{id}/approve returns 200, balance stays at $800 (deduction kept). Withdrawal flow working correctly. Test script: /app/backend_test_rewrite.py"
+
+  - task: "Admin settings: GET/PUT /api/admin/settings with spreadPips (0.1-10), tradingEnabled, categoryLeverage"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Admin settings: GET /api/admin/settings returns {spreadPips, tradingEnabled, categoryLeverage}. PUT accepts spreadPips (0.1-10 range enforced) and tradingEnabled. maxLeverage setting REMOVED - replaced by category rules. tradingEnabled=false blocks orders (403)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/admin/settings returns spreadPips=1, tradingEnabled=true, categoryLeverage={crypto:10, forex:100, metal:20, index:50, stock:10}. PUT {spreadPips: 2} returns 200, setting updated. PUT {spreadPips: 20} returns 400 'Base spread must be between 0.1 and 10 pips'. PUT {tradingEnabled: false} returns 200, subsequent order attempt returns 403 'Trading is temporarily disabled by the platform'. Settings restored to spreadPips=1, tradingEnabled=true. All admin settings working correctly. Test script: /app/backend_test_rewrite.py"
