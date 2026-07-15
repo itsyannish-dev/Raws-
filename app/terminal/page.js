@@ -2,8 +2,8 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { createChart, CandlestickSeries, ColorType } from 'lightweight-charts'
-import { api, positionPnl, fmtMoney, fmtSignedMoney, fmtPrice, askPrice, bidPrice, logout } from '@/lib/rm'
+import { createChart, CandlestickSeries, ColorType, createSeriesMarkers } from 'lightweight-charts'
+import { api, positionPnl, notionalUsd, fmtMoney, fmtSignedMoney, fmtPrice, askPrice, bidPrice, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
 import { AppDrawer } from '@/components/app-nav'
 import { Wallet, LogOut, LayoutDashboard, X, Menu, Home, CandlestickChart, ArrowLeftRight } from 'lucide-react'
@@ -35,6 +35,8 @@ const App = () => {
   const chartContainerRef = useRef(null)
   const chartApiRef = useRef(null)
   const seriesRef = useRef(null)
+  const markersRef = useRef(null)
+  const priceLinesRef = useRef([])
   const lastBarRef = useRef(null)
   const selectedRef = useRef(selected)
   const intervalStateRef = useRef(chartInterval)
@@ -194,14 +196,73 @@ const App = () => {
     const series = chart.addSeries(CandlestickSeries, {
       upColor: '#00FF66', downColor: '#ff3b5c', borderVisible: false, wickUpColor: '#00FF66', wickDownColor: '#ff3b5c',
     })
+    const markers = createSeriesMarkers(series, [])
     chartApiRef.current = chart
     seriesRef.current = series
+    markersRef.current = markers
     return () => {
       chart.remove()
       chartApiRef.current = null
       seriesRef.current = null
+      markersRef.current = null
+      priceLinesRef.current = []
     }
   }, [])
+
+  // ---------- trade markers + entry price lines on chart ----------
+  useEffect(() => {
+    if (!seriesRef.current) return
+    const sec = INTERVAL_SEC[chartInterval] || 3600
+    const bucket = (iso) => Math.floor(new Date(iso).getTime() / 1000 / sec) * sec
+    const markers = []
+    closedPositions.filter((p) => p.symbol === selected).forEach((p) => {
+      markers.push({
+        time: bucket(p.openedAt),
+        position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
+        color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+        shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
+        text: `${p.side === 'buy' ? 'BUY' : 'SELL'} ${p.lots}`,
+      })
+      if (p.closedAt) {
+        markers.push({
+          time: bucket(p.closedAt),
+          position: p.side === 'buy' ? 'aboveBar' : 'belowBar',
+          color: '#7d8590',
+          shape: 'circle',
+          text: `CLOSE ${p.lots}`,
+        })
+      }
+    })
+    positions.filter((p) => p.symbol === selected).forEach((p) => {
+      markers.push({
+        time: bucket(p.openedAt),
+        position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
+        color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+        shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
+        text: `${p.side === 'buy' ? 'BUY' : 'SELL'} ${p.lots}`,
+      })
+    })
+    markers.sort((a, b) => a.time - b.time)
+    try { markersRef.current?.setMarkers(markers) } catch (e) {}
+
+    // entry price lines for open positions on this symbol
+    priceLinesRef.current.forEach((pl) => { try { seriesRef.current.removePriceLine(pl) } catch (e) {} })
+    priceLinesRef.current = positions
+      .filter((p) => p.symbol === selected)
+      .map((p) => {
+        try {
+          return seriesRef.current.createPriceLine({
+            price: p.entryPrice,
+            color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `${p.side.toUpperCase()} ${p.lots}`,
+          })
+        } catch (e) { return null }
+      })
+      .filter(Boolean)
+  }, [positions, closedPositions, selected, chartInterval])
 
   // ---------- load candles ----------
   useEffect(() => {
@@ -233,11 +294,13 @@ const App = () => {
   const freeMargin = equity - usedMargin
   const marginLevel = usedMargin > 0 ? (equity / usedMargin) * 100 : null
 
-  const selMeta = symbols.find((s) => s.symbol === selected) || { decimals: 2, name: selected }
+  const selMeta = symbols.find((s) => s.symbol === selected) || { decimals: 2, name: selected, contractSize: 1, quote: 'USD' }
   const selQuote = quotes[selected]
   const lotsNum = Number(lots) || 0
   const midPrice = selQuote?.price || 0
-  const requiredMargin = (lotsNum * midPrice) / leverage
+  const contractUnits = lotsNum * (selMeta.contractSize || 1)
+  const orderNotional = notionalUsd(selMeta, midPrice, lotsNum)
+  const requiredMargin = orderNotional / leverage
 
   // ---------- actions ----------
   const placeOrder = async (side) => {
@@ -277,6 +340,7 @@ const App = () => {
   }
 
   const cryptoSymbols = symbols.filter((s) => s.type === 'crypto')
+  const forexSymbols = symbols.filter((s) => s.type === 'forex')
   const stockSymbols = symbols.filter((s) => s.type === 'stock')
 
   const WatchRow = ({ s, testPrefix = 'watchlist' }) => {
@@ -307,6 +371,8 @@ const App = () => {
     <>
       <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-2 pb-1">Crypto</div>
       {cryptoSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">Forex</div>
+      {forexSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
       <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">Stocks</div>
       {stockSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
     </>
@@ -359,7 +425,10 @@ const App = () => {
       </div>
 
       <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3 space-y-1.5 text-[11px]">
-        <div className="flex justify-between"><span className="text-white/35">Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(lotsNum * midPrice)}</span></div>
+        {(selMeta.contractSize || 1) > 1 && (
+          <div className="flex justify-between"><span className="text-white/35">Units ({selMeta.contractSize.toLocaleString()}/lot)</span><span className="font-mono" data-testid="order-units">{contractUnits.toLocaleString()}</span></div>
+        )}
+        <div className="flex justify-between"><span className="text-white/35">Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(orderNotional)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Required margin</span><span className="font-mono" data-testid="order-margin">{fmtMoney(requiredMargin)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Free margin</span><span className="font-mono">{fmtMoney(freeMargin)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">{(spread * 100).toFixed(2)}%</span></div>

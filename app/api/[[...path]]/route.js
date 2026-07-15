@@ -3,6 +3,7 @@ import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import WebSocket from 'ws'
 
 // ---------- CONFIG ----------
 const JWT_SECRET = process.env.JWT_SECRET || 'rawmarkets-dev-secret'
@@ -11,20 +12,30 @@ const DEFAULT_SPREAD = 0.0005 // 0.05% total spread
 const LEVERAGES = [1, 2, 5, 10, 20, 50, 100]
 
 const SYMBOLS = [
-  { symbol: 'BTCUSD', name: 'Bitcoin', type: 'crypto', binance: 'BTCUSDT', ws: 'BINANCE:BTCUSDT', decimals: 2 },
-  { symbol: 'ETHUSD', name: 'Ethereum', type: 'crypto', binance: 'ETHUSDT', ws: 'BINANCE:ETHUSDT', decimals: 2 },
-  { symbol: 'SOLUSD', name: 'Solana', type: 'crypto', binance: 'SOLUSDT', ws: 'BINANCE:SOLUSDT', decimals: 3 },
-  { symbol: 'XRPUSD', name: 'Ripple', type: 'crypto', binance: 'XRPUSDT', ws: 'BINANCE:XRPUSDT', decimals: 4 },
-  { symbol: 'BNBUSD', name: 'BNB', type: 'crypto', binance: 'BNBUSDT', ws: 'BINANCE:BNBUSDT', decimals: 2 },
-  { symbol: 'DOGEUSD', name: 'Dogecoin', type: 'crypto', binance: 'DOGEUSDT', ws: 'BINANCE:DOGEUSDT', decimals: 5 },
-  { symbol: 'ADAUSD', name: 'Cardano', type: 'crypto', binance: 'ADAUSDT', ws: 'BINANCE:ADAUSDT', decimals: 4 },
-  { symbol: 'LINKUSD', name: 'Chainlink', type: 'crypto', binance: 'LINKUSDT', ws: 'BINANCE:LINKUSDT', decimals: 3 },
-  { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', finnhub: 'AAPL', yahoo: 'AAPL', decimals: 2 },
-  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', finnhub: 'TSLA', yahoo: 'TSLA', decimals: 2 },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', finnhub: 'NVDA', yahoo: 'NVDA', decimals: 2 },
-  { symbol: 'MSFT', name: 'Microsoft', type: 'stock', finnhub: 'MSFT', yahoo: 'MSFT', decimals: 2 },
-  { symbol: 'AMZN', name: 'Amazon', type: 'stock', finnhub: 'AMZN', yahoo: 'AMZN', decimals: 2 },
-  { symbol: 'GOOGL', name: 'Alphabet', type: 'stock', finnhub: 'GOOGL', yahoo: 'GOOGL', decimals: 2 },
+  // Crypto (contractSize 1, quoted in USD)
+  { symbol: 'BTCUSD', name: 'Bitcoin', type: 'crypto', binance: 'BTCUSDT', ws: 'BINANCE:BTCUSDT', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'ETHUSD', name: 'Ethereum', type: 'crypto', binance: 'ETHUSDT', ws: 'BINANCE:ETHUSDT', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'SOLUSD', name: 'Solana', type: 'crypto', binance: 'SOLUSDT', ws: 'BINANCE:SOLUSDT', decimals: 3, contractSize: 1, quote: 'USD' },
+  { symbol: 'XRPUSD', name: 'Ripple', type: 'crypto', binance: 'XRPUSDT', ws: 'BINANCE:XRPUSDT', decimals: 4, contractSize: 1, quote: 'USD' },
+  { symbol: 'BNBUSD', name: 'BNB', type: 'crypto', binance: 'BNBUSDT', ws: 'BINANCE:BNBUSDT', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'DOGEUSD', name: 'Dogecoin', type: 'crypto', binance: 'DOGEUSDT', ws: 'BINANCE:DOGEUSDT', decimals: 5, contractSize: 1, quote: 'USD' },
+  { symbol: 'ADAUSD', name: 'Cardano', type: 'crypto', binance: 'ADAUSDT', ws: 'BINANCE:ADAUSDT', decimals: 4, contractSize: 1, quote: 'USD' },
+  { symbol: 'LINKUSD', name: 'Chainlink', type: 'crypto', binance: 'LINKUSDT', ws: 'BINANCE:LINKUSDT', decimals: 3, contractSize: 1, quote: 'USD' },
+  // Forex (contractSize 100,000 = 1 standard lot)
+  { symbol: 'EURUSD', name: 'Euro / US Dollar', type: 'forex', ws: 'OANDA:EUR_USD', yahoo: 'EURUSD=X', decimals: 5, contractSize: 100000, quote: 'USD' },
+  { symbol: 'GBPUSD', name: 'British Pound / US Dollar', type: 'forex', ws: 'OANDA:GBP_USD', yahoo: 'GBPUSD=X', decimals: 5, contractSize: 100000, quote: 'USD' },
+  { symbol: 'AUDUSD', name: 'Australian Dollar / US Dollar', type: 'forex', ws: 'OANDA:AUD_USD', yahoo: 'AUDUSD=X', decimals: 5, contractSize: 100000, quote: 'USD' },
+  { symbol: 'NZDUSD', name: 'NZ Dollar / US Dollar', type: 'forex', ws: 'OANDA:NZD_USD', yahoo: 'NZDUSD=X', decimals: 5, contractSize: 100000, quote: 'USD' },
+  { symbol: 'USDJPY', name: 'US Dollar / Japanese Yen', type: 'forex', ws: 'OANDA:USD_JPY', yahoo: 'USDJPY=X', decimals: 3, contractSize: 100000, quote: 'JPY' },
+  { symbol: 'USDCAD', name: 'US Dollar / Canadian Dollar', type: 'forex', ws: 'OANDA:USD_CAD', yahoo: 'USDCAD=X', decimals: 5, contractSize: 100000, quote: 'CAD' },
+  { symbol: 'USDCHF', name: 'US Dollar / Swiss Franc', type: 'forex', ws: 'OANDA:USD_CHF', yahoo: 'USDCHF=X', decimals: 5, contractSize: 100000, quote: 'CHF' },
+  // Stocks (contractSize 1)
+  { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', finnhub: 'AAPL', yahoo: 'AAPL', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', type: 'stock', finnhub: 'TSLA', yahoo: 'TSLA', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', type: 'stock', finnhub: 'NVDA', yahoo: 'NVDA', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'MSFT', name: 'Microsoft', type: 'stock', finnhub: 'MSFT', yahoo: 'MSFT', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'AMZN', name: 'Amazon', type: 'stock', finnhub: 'AMZN', yahoo: 'AMZN', decimals: 2, contractSize: 1, quote: 'USD' },
+  { symbol: 'GOOGL', name: 'Alphabet', type: 'stock', finnhub: 'GOOGL', yahoo: 'GOOGL', decimals: 2, contractSize: 1, quote: 'USD' },
 ]
 
 const symMeta = (symbol) => SYMBOLS.find((s) => s.symbol === symbol)
@@ -67,6 +78,65 @@ async function getAuthUser(request, database) {
 const quoteCache = new Map() // symbol -> { data, ts }
 const QUOTE_TTL = 5000
 
+// Server-side Finnhub WebSocket feed for live forex prices (singleton across hot reloads)
+function getForexFeed() {
+  if (globalThis.__rmForexFeed) return globalThis.__rmForexFeed
+  const feed = { prices: {}, ws: null }
+  globalThis.__rmForexFeed = feed
+  const connect = () => {
+    if (!FINNHUB_KEY) return
+    try {
+      const ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`)
+      feed.ws = ws
+      ws.on('open', () => {
+        SYMBOLS.filter((s) => s.type === 'forex').forEach((s) => {
+          try { ws.send(JSON.stringify({ type: 'subscribe', symbol: s.ws })) } catch (e) {}
+        })
+      })
+      ws.on('message', (raw) => {
+        try {
+          const m = JSON.parse(raw.toString())
+          if (m.type === 'trade' && Array.isArray(m.data)) {
+            for (const t of m.data) feed.prices[t.s] = { price: t.p, ts: Date.now() }
+          }
+        } catch (e) {}
+      })
+      ws.on('close', () => setTimeout(connect, 5000))
+      ws.on('error', () => { try { ws.close() } catch (e) {} })
+    } catch (e) {
+      setTimeout(connect, 10000)
+    }
+  }
+  connect()
+  return feed
+}
+
+// Yahoo snapshot (price + prev close) used for forex daily change and as price fallback
+const yahooQuoteCache = new Map()
+async function fetchYahooQuote(meta) {
+  const c = yahooQuoteCache.get(meta.symbol)
+  if (c && Date.now() - c.ts < 60000) return c.data
+  try {
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${meta.yahoo}?interval=1d&range=5d`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }, cache: 'no-store',
+    })
+    if (!r.ok) return c?.data || null
+    const j = await r.json()
+    const m = j?.chart?.result?.[0]?.meta
+    if (!m?.regularMarketPrice) return c?.data || null
+    const data = {
+      price: m.regularMarketPrice,
+      prevClose: m.chartPreviousClose || m.previousClose || m.regularMarketPrice,
+      high: m.regularMarketDayHigh,
+      low: m.regularMarketDayLow,
+    }
+    yahooQuoteCache.set(meta.symbol, { data, ts: Date.now() })
+    return data
+  } catch (e) {
+    return c?.data || null
+  }
+}
+
 async function fetchQuote(meta) {
   const cached = quoteCache.get(meta.symbol)
   if (cached && Date.now() - cached.ts < QUOTE_TTL) return cached.data
@@ -78,6 +148,24 @@ async function fetchQuote(meta) {
     data = {
       symbol: meta.symbol, price: +j.lastPrice, change: +j.priceChange, changePercent: +j.priceChangePercent,
       high: +j.highPrice, low: +j.lowPrice, prevClose: +j.openPrice, ts: Date.now(),
+    }
+  } else if (meta.type === 'forex') {
+    // Live tick from server-side Finnhub WS, daily stats + fallback from Yahoo
+    const feed = getForexFeed()
+    const live = feed.prices[meta.ws]
+    const yq = await fetchYahooQuote(meta)
+    const price = live && Date.now() - live.ts < 120000 ? live.price : yq?.price
+    if (!price) throw new Error(`Quote unavailable for ${meta.symbol}`)
+    const prevClose = yq?.prevClose || price
+    data = {
+      symbol: meta.symbol,
+      price,
+      change: price - prevClose,
+      changePercent: prevClose ? ((price - prevClose) / prevClose) * 100 : 0,
+      high: yq?.high || null,
+      low: yq?.low || null,
+      prevClose,
+      ts: Date.now(),
     }
   } else {
     const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${meta.finnhub}&token=${FINNHUB_KEY}`, { cache: 'no-store' })
@@ -182,10 +270,27 @@ async function getSettings(database) {
 const askPrice = (mid, spread = DEFAULT_SPREAD) => mid * (1 + spread / 2)
 const bidPrice = (mid, spread = DEFAULT_SPREAD) => mid * (1 - spread / 2)
 
+const unitsOf = (meta, lots) => lots * (meta?.contractSize || 1)
+
+// PnL in USD. For USD-quoted pairs (EURUSD, BTCUSD, stocks) the diff is already USD.
+// For USD-base forex pairs (USDJPY, USDCAD, USDCHF) the diff is in quote currency -> convert by dividing by the pair's current price.
+function pnlUsdOf(meta, entryPrice, closePrice, lots, dir, conversionPrice) {
+  const diff = (closePrice - entryPrice) * dir * unitsOf(meta, lots)
+  if (meta?.quote && meta.quote !== 'USD' && conversionPrice) return diff / conversionPrice
+  return diff
+}
+
+// Notional in USD: XXXUSD -> units * price; USDXXX -> units (base is USD)
+function notionalUsdOf(meta, price, lots) {
+  const units = unitsOf(meta, lots)
+  return meta?.quote && meta.quote !== 'USD' ? units : units * price
+}
+
 function positionFloatingPnl(p, mid, spread = DEFAULT_SPREAD) {
+  const meta = symMeta(p.symbol) || { contractSize: p.contractSize || 1, quote: p.quoteCurrency || 'USD' }
   const closeAt = p.side === 'buy' ? bidPrice(mid, spread) : askPrice(mid, spread)
   const dir = p.side === 'buy' ? 1 : -1
-  return (closeAt - p.entryPrice) * p.lots * dir
+  return pnlUsdOf(meta, p.entryPrice, closeAt, p.lots, dir, mid)
 }
 
 async function computeAccount(database, user, spread = DEFAULT_SPREAD) {
@@ -295,7 +400,7 @@ async function handleRoute(request, { params }) {
 
     // ===== MARKET (public) =====
     if (route === 'market/symbols' && method === 'GET') {
-      return json({ symbols: SYMBOLS.map(({ symbol, name, type, decimals }) => ({ symbol, name, type, decimals })) })
+      return json({ symbols: SYMBOLS.map(({ symbol, name, type, decimals, contractSize, quote }) => ({ symbol, name, type, decimals, contractSize, quote })) })
     }
 
     if (route === 'market/quotes' && method === 'GET') {
@@ -366,7 +471,7 @@ async function handleRoute(request, { params }) {
         return err('Market price unavailable, try again', 502)
       }
       const entryPrice = side === 'buy' ? askPrice(quote.price, settings.spread) : bidPrice(quote.price, settings.spread)
-      const notional = lotsNum * entryPrice
+      const notional = notionalUsdOf(meta, entryPrice, lotsNum)
       const margin = notional / lev
 
       const account = await computeAccount(database, user, settings.spread)
@@ -384,6 +489,8 @@ async function handleRoute(request, { params }) {
         leverage: lev,
         margin,
         notional,
+        contractSize: meta.contractSize || 1,
+        quoteCurrency: meta.quote || 'USD',
         status: 'open',
         openedAt: new Date().toISOString(),
         closedAt: null,
@@ -427,7 +534,7 @@ async function handleRoute(request, { params }) {
       }
       const closePrice = position.side === 'buy' ? bidPrice(quote.price, settings.spread) : askPrice(quote.price, settings.spread)
       const dir = position.side === 'buy' ? 1 : -1
-      const pnl = (closePrice - position.entryPrice) * position.lots * dir
+      const pnl = pnlUsdOf(meta, position.entryPrice, closePrice, position.lots, dir, quote.price)
       const closedAt = new Date().toISOString()
       await database.collection('positions').updateOne(
         { id: posId },

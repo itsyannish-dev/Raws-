@@ -219,7 +219,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
@@ -239,6 +239,10 @@ agent_communication:
     message: "Settings endpoints testing complete. Both endpoints WORKING. PATCH /api/auth/profile correctly updates user name, validates input (400 for empty/missing name), requires auth (401 without token). POST /api/auth/change-password correctly validates current password (401 if wrong), validates new password length (400 if < 6 chars), successfully updates password hash, and old password becomes invalid after change. All error handling and validation working as expected. Test script: /app/test_settings_simple.py"
   - agent: "testing"
     message: "Admin endpoints testing complete. All admin functionality WORKING. Access control enforced (401 without token, 403 for non-admin). Stats endpoint returns all required metrics. Users list works with search, no passwordHash exposed. Balance adjustment creates transactions, validates negative/zero amounts. Withdrawal approval/rejection flow correct (approve keeps deduction, reject refunds). Positions list includes user info. Settings GET/PUT working with enforcement (maxLeverage and tradingEnabled validated in order creation). Invalid settings correctly rejected. Settings restored to defaults (spread=0.0005, maxLeverage=100, tradingEnabled=true). Test script: /app/backend_test_admin.py"
+  - agent: "main"
+    message: "Added 7 forex pairs (EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF). Server keeps a Finnhub WS (OANDA) singleton feeding live prices; Yahoo provides daily change + fallback. Candles via Yahoo. contractSize=100000/lot; notional USD = units*price (XXXUSD) or units (USDXXX); PnL converted from quote currency to USD for USD-base pairs. Positions now store contractSize + quoteCurrency. Please test forex functionality."
+  - agent: "testing"
+    message: "Forex testing complete. All forex functionality WORKING. Tested: (1) 21 symbols total with 7 forex pairs having correct metadata (contractSize=100000, proper quote currencies). (2) Live quotes for EURUSD/USDJPY/GBPUSD with valid price ranges and changePercent. (3) Candles for EURUSD 1h/1d and USDJPY 15m in ascending order. (4) Full forex trading cycle with fresh user: EURUSD order (contractSize=100000, quoteCurrency=USD, entryPrice≈mid*1.00025, notional=$1,142.99, margin=$114.30), USDJPY order (notional=$1,000 exactly for USD-base, margin=$100), account summary shows correct usedMargin sum and equity calculation, both positions closed with small PnL within expected range, balance updated by exact PnL sum. (5) Oversized order correctly rejected with insufficient margin error. (6) Crypto regression test passed. Test script: /app/backend_test_forex.py"
 
   - task: "Admin: stats, users, adjust-balance, withdrawals approve/reject, positions, platform settings"
     implemented: true
@@ -254,3 +258,18 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: All admin endpoints working correctly. (1) Access control: all /api/admin/* endpoints return 401 without token, 403 with regular user token. (2) GET /api/admin/stats returns all required fields (totalUsers: 22, totalBalance: $257,513.97, openPositions: 13, pendingWithdrawals: 5/$4,000, totalDeposited: $260,000, totalWithdrawn: $0). (3) GET /api/admin/users returns 22 users without passwordHash, search filter correctly finds trader user. (4) POST /api/admin/users/{id}/adjust-balance: +$500 credit creates adjustment transaction visible in user's list, -$200 debit works, -$1000 correctly rejected (400 would go negative), amount=0 correctly rejected (400). (5) Withdrawal flow: deposit $1000 + withdraw $400 creates pending tx with balance $600, admin GET /api/admin/transactions?type=withdrawal&status=pending shows it with user info, approve keeps balance at $600, second withdrawal rejection refunds balance correctly, re-approval of approved tx correctly rejected (400). (6) GET /api/admin/positions?status=open returns 13 positions with user email attached. (7) Settings: GET returns current settings, PUT maxLeverage=20 enforced (order with leverage 50 rejected with 'Maximum allowed leverage is 20x'), PUT tradingEnabled=false enforced (order rejected with 403 'trading disabled'), settings restored to spread=0.0005/maxLeverage=100/tradingEnabled=true, invalid spread=0.5 correctly rejected (400). Test script: /app/backend_test_admin.py"
+
+  - task: "Forex: symbols, live quotes (server-side Finnhub WS + Yahoo fallback), candles, forex PnL/margin math"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added 7 forex pairs (EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF). Server keeps a Finnhub WS (OANDA) singleton feeding live prices; Yahoo provides daily change + fallback. Candles via Yahoo. contractSize=100000/lot; notional USD = units*price (XXXUSD) or units (USDXXX); PnL converted from quote currency to USD for USD-base pairs. Positions now store contractSize + quoteCurrency. Chart trade markers + entry price lines added client-side."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Complete forex functionality verified. (1) GET /api/market/symbols returns 21 symbols: 7 forex (EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF) with type='forex', contractSize=100000, correct quote currencies (USD for EURUSD/GBPUSD/AUDUSD/NZDUSD; JPY/CAD/CHF for USD-base pairs); crypto/stocks have contractSize=1. (2) GET /api/market/quotes?symbols=EURUSD,USDJPY,GBPUSD returns valid prices (EURUSD=1.143 in range 1.0-1.3, USDJPY=162.217 in range 130-180), changePercent present; called twice with 6s gap, both succeeded. (3) GET /api/market/candles works for EURUSD 1h (300 candles), EURUSD 1d (260 candles), USDJPY 15m (300 candles), all in ascending order with proper OHLC structure. (4) FOREX TRADING MATH with fresh user (deposit $10,000): EURUSD buy 0.01 lots leverage 10 -> position has contractSize=100000, quoteCurrency='USD', entryPrice=1.142985675 (≈ mid*1.00025), notional=$1,142.99 (≈ 0.01*100000*entryPrice), margin=$114.30 (notional/10). USDJPY buy 0.01 lots leverage 10 -> notional=$1,000 exactly (USD-base), margin=$100. GET /api/account/summary -> usedMargin=$214.30 (sum of both margins), equity=$9,998.93 (balance + floatingPnl). Closed both positions -> EURUSD pnl=-$0.57, USDJPY pnl=-$0.50 (both within -$20 to +$20 for immediate close), balance updated by exact pnl sum to $9,998.93. Oversized order (10 lots leverage 1 EURUSD) correctly rejected with 400 'Insufficient free margin. Required: $1,143,040.69, available: $9,998.60'. (5) REGRESSION: crypto order BTCUSD 0.01 lots leverage 10 works, margin=$65.34 (0.01*entryPrice/10), close works with pnl=-$0.33. All forex functionality working correctly. Test script: /app/backend_test_forex.py"

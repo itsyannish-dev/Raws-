@@ -130,7 +130,7 @@ const App = () => {
           <div className="flex items-center justify-between mb-3">
             <div className="text-[11px] uppercase tracking-widest text-white/30">Market watch</div>
             <div className="flex gap-1">
-              {[{ k: 'all', l: 'All' }, { k: 'crypto', l: 'Crypto' }, { k: 'stock', l: 'Stocks' }].map((f) => (
+              {[{ k: 'all', l: 'All' }, { k: 'crypto', l: 'Crypto' }, { k: 'forex', l: 'Forex' }, { k: 'stock', l: 'Stocks' }].map((f) => (
                 <button key={f.k} data-testid={`filter-${f.k}`} onClick={() => setFilter(f.k)} className={`px-3 py-1 text-xs rounded-full font-medium transition ${filter === f.k ? 'bg-[#00FF66] text-black' : 'text-white/40 hover:text-white bg-white/5'}`}>
                   {f.l}
                 </button>
