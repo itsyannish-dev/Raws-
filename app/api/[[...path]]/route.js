@@ -71,7 +71,7 @@ async function getDb() {
 const json = (data, status = 200) => NextResponse.json(data, { status })
 const err = (message, status = 400) => NextResponse.json({ error: message }, { status })
 
-const sanitizeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, balance: u.balance, createdAt: u.createdAt })
+const sanitizeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, balance: u.balance, verificationStatus: u.verificationStatus || 'unverified', createdAt: u.createdAt })
 
 function signToken(user) {
   return jwt.sign({ uid: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
@@ -364,6 +364,21 @@ async function computeAccount(database, user) {
   }
 }
 
+// ---------- KYC VERIFICATION ----------
+// verified when user has an approved 'identity' AND an approved 'address' document
+async function recomputeVerification(database, userId) {
+  const docs = await database.collection('documents').find({ userId }, { projection: { _id: 0, type: 1, status: 1 } }).toArray()
+  const hasApproved = (type) => docs.some((d) => d.type === type && d.status === 'approved')
+  const hasPending = docs.some((d) => d.status === 'pending')
+  const hasRejected = docs.some((d) => d.status === 'rejected')
+  let status = 'unverified'
+  if (hasApproved('identity') && hasApproved('address')) status = 'verified'
+  else if (hasPending) status = 'pending'
+  else if (hasRejected) status = 'rejected'
+  await database.collection('users').updateOne({ id: userId }, { $set: { verificationStatus: status } })
+  return status
+}
+
 // ---------- NOWPAYMENTS ----------
 const NP_BASE = process.env.NOWPAYMENTS_BASE_URL || 'https://api.nowpayments.io/v1'
 async function npRequest(path, options = {}) {
@@ -453,6 +468,7 @@ async function handleRoute(request, { params }) {
         passwordHash: await bcrypt.hash(password, 10),
         role: 'user',
         balance: 0,
+        verificationStatus: 'unverified',
         createdAt: new Date().toISOString(),
       }
       await database.collection('users').insertOne(user)
@@ -797,6 +813,49 @@ async function handleRoute(request, { params }) {
       return json({ transactions: list })
     }
 
+    // ===== DOCUMENTS (KYC) =====
+    if (route === 'documents' && method === 'POST') {
+      const user = await getAuthUser(request, database)
+      if (!user) return err('Unauthorized', 401)
+      const body = await request.json()
+      const type = body?.type
+      if (!['identity', 'address'].includes(type)) return err('Document type must be identity or address')
+      const fileName = String(body?.fileName || 'document').slice(0, 150)
+      const mimeType = String(body?.mimeType || '')
+      const data = String(body?.data || '')
+      if (!data || data.length < 100) return err('File data is required')
+      if (data.length > 7000000) return err('File too large — maximum size is 5MB')
+      if (!/^(image\/(png|jpeg|jpg|webp|heic|heif)|application\/pdf)$/.test(mimeType)) return err('Only images (PNG, JPG, WEBP) or PDF files are accepted')
+      // replace any previous non-approved doc of the same type
+      await database.collection('documents').deleteMany({ userId: user.id, type, status: { $in: ['pending', 'rejected'] } })
+      const doc = {
+        id: uuidv4(),
+        userId: user.id,
+        type,
+        fileName,
+        mimeType,
+        data,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        reviewedAt: null,
+      }
+      await database.collection('documents').insertOne(doc)
+      const verificationStatus = await recomputeVerification(database, user.id)
+      const { _id, data: _fileData, ...clean } = doc
+      return json({ document: clean, verificationStatus }, 201)
+    }
+
+    if (route === 'documents' && method === 'GET') {
+      const user = await getAuthUser(request, database)
+      if (!user) return err('Unauthorized', 401)
+      const docs = await database
+        .collection('documents')
+        .find({ userId: user.id }, { projection: { _id: 0, data: 0 } })
+        .sort({ createdAt: -1 })
+        .toArray()
+      return json({ documents: docs, verificationStatus: user.verificationStatus || 'unverified' })
+    }
+
     // ===== ADMIN =====
     if (path[0] === 'admin') {
       const admin = await getAuthUser(request, database)
@@ -804,7 +863,7 @@ async function handleRoute(request, { params }) {
       if (admin.role !== 'admin') return err('Forbidden: admin access required', 403)
 
       if (route === 'admin/stats' && method === 'GET') {
-        const [userCount, balanceAgg, openPositions, pendingWd, pendingDep, depositAgg, withdrawAgg] = await Promise.all([
+        const [userCount, balanceAgg, openPositions, pendingWd, pendingDep, depositAgg, withdrawAgg, pendingDocs] = await Promise.all([
           database.collection('users').countDocuments({}),
           database.collection('users').aggregate([{ $group: { _id: null, total: { $sum: '$balance' } } }]).toArray(),
           database.collection('positions').countDocuments({ status: 'open' }),
@@ -812,6 +871,7 @@ async function handleRoute(request, { params }) {
           database.collection('transactions').find({ type: 'deposit', status: { $in: ['pending', 'waiting_payment'] } }).toArray(),
           database.collection('transactions').aggregate([{ $match: { type: 'deposit', status: { $in: ['approved', 'completed'] } } }, { $group: { _id: null, total: { $sum: '$amount' } } }]).toArray(),
           database.collection('transactions').aggregate([{ $match: { type: 'withdrawal', status: 'approved' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]).toArray(),
+          database.collection('documents').countDocuments({ status: 'pending' }),
         ])
         return json({
           stats: {
@@ -824,6 +884,7 @@ async function handleRoute(request, { params }) {
             awaitingPaymentDeposits: pendingDep.filter((t) => t.status === 'waiting_payment').length,
             totalDeposited: depositAgg[0]?.total || 0,
             totalWithdrawn: withdrawAgg[0]?.total || 0,
+            pendingDocuments: pendingDocs,
           },
         })
       }
@@ -918,6 +979,44 @@ async function handleRoute(request, { params }) {
           return json({ transaction: { ...tx, _id: undefined, status: newStatus } })
         }
         return err('Only deposits and withdrawals can be approved or rejected')
+      }
+
+      // ---- KYC document review ----
+      if (route === 'admin/documents' && method === 'GET') {
+        const url = new URL(request.url)
+        const status = url.searchParams.get('status')
+        const query = status && status !== 'all' ? { status } : {}
+        const docs = await database
+          .collection('documents')
+          .find(query, { projection: { _id: 0, data: 0 } })
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .toArray()
+        const userIds = [...new Set(docs.map((d) => d.userId))]
+        const docUsers = await database.collection('users').find({ id: { $in: userIds } }, { projection: { _id: 0, id: 1, name: 1, email: 1, verificationStatus: 1 } }).toArray()
+        const userMap = Object.fromEntries(docUsers.map((u) => [u.id, u]))
+        return json({ documents: docs.map((d) => ({ ...d, user: userMap[d.userId] || null })) })
+      }
+
+      // GET /api/admin/documents/{id}/file — returns the stored file for preview
+      if (path[1] === 'documents' && path[3] === 'file' && method === 'GET') {
+        const doc = await database.collection('documents').findOne({ id: path[2] }, { projection: { _id: 0 } })
+        if (!doc) return err('Document not found', 404)
+        return json({ document: doc })
+      }
+
+      // POST /api/admin/documents/{id}/approve|reject
+      if (path[1] === 'documents' && (path[3] === 'approve' || path[3] === 'reject') && method === 'POST') {
+        const doc = await database.collection('documents').findOne({ id: path[2] })
+        if (!doc) return err('Document not found', 404)
+        if (doc.status !== 'pending') return err(`Document is already ${doc.status}`)
+        const newStatus = path[3] === 'approve' ? 'approved' : 'rejected'
+        await database.collection('documents').updateOne(
+          { id: doc.id },
+          { $set: { status: newStatus, reviewedAt: new Date().toISOString(), adminId: admin.id } }
+        )
+        const verificationStatus = await recomputeVerification(database, doc.userId)
+        return json({ document: { ...doc, _id: undefined, data: undefined, status: newStatus }, verificationStatus })
       }
 
       if (route === 'admin/positions' && method === 'GET') {
