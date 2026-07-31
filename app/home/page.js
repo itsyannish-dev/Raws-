@@ -4,10 +4,13 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, fmtMoney, fmtSignedMoney, fmtPrice, logout } from '@/lib/rm'
 import { AppDrawer, BottomNav } from '@/components/app-nav'
-import { Menu, Wallet, LogOut, ArrowDownToLine, ArrowUpFromLine, CandlestickChart, ArrowLeftRight, Search } from 'lucide-react'
+import { SymbolIcon } from '@/components/symbol-icon'
+import { useLang, LangToggle } from '@/lib/i18n'
+import { Menu, Wallet, LogOut, ArrowDownToLine, ArrowUpFromLine, CandlestickChart, ArrowLeftRight } from 'lucide-react'
 
 const App = () => {
   const router = useRouter()
+  const { t } = useLang()
   const [user, setUser] = useState(null)
   const [account, setAccount] = useState(null)
   const [symbols, setSymbols] = useState([])
@@ -37,31 +40,39 @@ const App = () => {
       } catch (e) {}
     }
     loadMarket()
-    const t = setInterval(async () => {
+    const timer = setInterval(async () => {
       try {
         const q = await api.get('/market/quotes')
         setQuotes(q.data.quotes)
       } catch (e) {}
     }, 10000)
     const acctT = setInterval(refresh, 20000)
-    // scroll to markets if ?view=markets
     try {
       const view = new URLSearchParams(window.location.search).get('view')
       if (view === 'markets') {
         setTimeout(() => document.getElementById('market-watch')?.scrollIntoView({ behavior: 'smooth' }), 400)
       }
     } catch (e) {}
-    return () => { clearInterval(t); clearInterval(acctT) }
+    return () => { clearInterval(timer); clearInterval(acctT) }
   }, [refresh, router])
 
   const quickActions = [
-    { label: 'Deposit', icon: ArrowDownToLine, path: '/dashboard?action=deposit', accent: true, testid: 'qa-deposit' },
-    { label: 'Withdraw', icon: ArrowUpFromLine, path: '/dashboard?action=withdraw', testid: 'qa-withdraw' },
-    { label: 'Trade', icon: ArrowLeftRight, path: '/terminal?tab=trade', testid: 'qa-trade' },
-    { label: 'Charts', icon: CandlestickChart, path: '/terminal', testid: 'qa-charts' },
+    { label: t('Deposit'), icon: ArrowDownToLine, path: '/dashboard?action=deposit', accent: true, testid: 'qa-deposit' },
+    { label: t('Withdraw'), icon: ArrowUpFromLine, path: '/dashboard?action=withdraw', testid: 'qa-withdraw' },
+    { label: t('Trade'), icon: ArrowLeftRight, path: '/terminal?tab=trade', testid: 'qa-trade' },
+    { label: t('Charts'), icon: CandlestickChart, path: '/terminal', testid: 'qa-charts' },
   ]
 
   const list = symbols.filter((s) => filter === 'all' || s.type === filter)
+
+  const FILTERS = [
+    { k: 'all', l: t('All') },
+    { k: 'crypto', l: t('Crypto') },
+    { k: 'forex', l: t('Forex') },
+    { k: 'metal', l: t('Metals') },
+    { k: 'index', l: t('Indices') },
+    { k: 'stock', l: t('Stocks') },
+  ]
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -77,8 +88,9 @@ const App = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <LangToggle className="hidden sm:flex" />
           <button data-testid="deposit-nav-btn" onClick={() => router.push('/dashboard?action=deposit')} className="flex items-center gap-1.5 text-xs font-semibold bg-[#00FF66] text-black px-3.5 py-2 rounded-full hover:bg-[#00e65c] transition">
-            <Wallet className="h-3.5 w-3.5" /> Deposit
+            <Wallet className="h-3.5 w-3.5" /> {t('Deposit')}
           </button>
           <button data-testid="logout-btn" onClick={() => logout(router)} className="p-2 text-white/50 hover:text-white transition">
             <LogOut className="h-4 w-4" />
@@ -89,16 +101,16 @@ const App = () => {
       <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 pb-28 md:pb-12">
         {/* GREETING */}
         <h1 className="text-2xl font-bold" data-testid="home-greeting">
-          {user ? `Welcome back, ${user.name.split(' ')[0]}` : 'Welcome back'}
+          {user ? `${t('Welcome back')}, ${user.name.split(' ')[0]}` : t('Welcome back')}
         </h1>
-        <p className="text-white/40 text-sm mt-1">Here's your account at a glance.</p>
+        <p className="text-white/40 text-sm mt-1">{t("Here's your account at a glance.")}</p>
 
         {/* ACCOUNT SUMMARY */}
         <div className="grid grid-cols-3 gap-3 mt-6">
           {[
-            { label: 'Balance', value: account ? fmtMoney(account.balance) : '—', testid: 'home-balance' },
-            { label: 'Equity', value: account ? fmtMoney(account.equity) : '—', testid: 'home-equity' },
-            { label: 'Floating PnL', value: account ? fmtSignedMoney(account.floatingPnl) : '—', color: (account?.floatingPnl || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]', testid: 'home-pnl' },
+            { label: t('Balance'), value: account ? fmtMoney(account.balance) : '—', testid: 'home-balance' },
+            { label: t('Equity'), value: account ? fmtMoney(account.equity) : '—', testid: 'home-equity' },
+            { label: t('Floating PnL'), value: account ? fmtSignedMoney(account.floatingPnl) : '—', color: (account?.floatingPnl || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]', testid: 'home-pnl' },
           ].map((c) => (
             <div key={c.label} className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
               <div className="text-[10px] uppercase tracking-widest text-white/30">{c.label}</div>
@@ -109,7 +121,7 @@ const App = () => {
 
         {/* QUICK ACTIONS */}
         <div className="mt-6">
-          <div className="text-[11px] uppercase tracking-widest text-white/30 mb-3">Quick actions</div>
+          <div className="text-[11px] uppercase tracking-widest text-white/30 mb-3">{t('Quick actions')}</div>
           <div className="grid grid-cols-4 gap-3" data-testid="quick-actions">
             {quickActions.map((a) => (
               <button
@@ -127,10 +139,10 @@ const App = () => {
 
         {/* MARKET WATCH */}
         <div className="mt-8" id="market-watch">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[11px] uppercase tracking-widest text-white/30">Market watch</div>
-            <div className="flex gap-1">
-              {[{ k: 'all', l: 'All' }, { k: 'crypto', l: 'Crypto' }, { k: 'forex', l: 'Forex' }, { k: 'stock', l: 'Stocks' }].map((f) => (
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="text-[11px] uppercase tracking-widest text-white/30">{t('Market watch')}</div>
+            <div className="flex gap-1 flex-wrap">
+              {FILTERS.map((f) => (
                 <button key={f.k} data-testid={`filter-${f.k}`} onClick={() => setFilter(f.k)} className={`px-3 py-1 text-xs rounded-full font-medium transition ${filter === f.k ? 'bg-[#00FF66] text-black' : 'text-white/40 hover:text-white bg-white/5'}`}>
                   {f.l}
                 </button>
@@ -149,9 +161,7 @@ const App = () => {
                   className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] transition text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold ${s.type === 'crypto' ? 'bg-[#00FF66]/10 text-[#00FF66]' : 'bg-white/5 text-white/60'}`}>
-                      {s.symbol.slice(0, 2)}
-                    </div>
+                    <SymbolIcon symbol={s.symbol} type={s.type} size={32} />
                     <div>
                       <div className="text-sm font-semibold">{s.symbol}</div>
                       <div className="text-[11px] text-white/35">{s.name}</div>
@@ -166,7 +176,7 @@ const App = () => {
                 </button>
               )
             })}
-            {list.length === 0 && <div className="px-4 py-10 text-center text-white/25 text-sm">Loading markets…</div>}
+            {list.length === 0 && <div className="px-4 py-10 text-center text-white/25 text-sm">{t('Loading markets…')}</div>}
           </div>
         </div>
       </main>

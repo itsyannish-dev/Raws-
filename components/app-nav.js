@@ -2,13 +2,15 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Home, CandlestickChart, LineChart, Wallet, ArrowDownToLine, ArrowUpFromLine, Settings, LogOut, X, ArrowLeftRight, ShieldCheck } from 'lucide-react'
+import { Home, CandlestickChart, LineChart, Wallet, ArrowDownToLine, ArrowUpFromLine, Settings, LogOut, X, ArrowLeftRight, ShieldCheck, ListOrdered } from 'lucide-react'
 import { logout } from '@/lib/rm'
+import { useLang, LangToggle } from '@/lib/i18n'
 
 const MENU_ITEMS = [
   { label: 'Home', icon: Home, path: '/home', testid: 'menu-home' },
   { label: 'Charts', icon: CandlestickChart, path: '/terminal', testid: 'menu-charts' },
-  { label: 'Markets', icon: LineChart, path: '/home?view=markets', testid: 'menu-markets' },
+  { label: 'Markets', icon: LineChart, path: '/terminal?tab=markets', testid: 'menu-markets' },
+  { label: 'Positions', icon: ListOrdered, path: '/terminal?tab=positions', testid: 'menu-positions' },
   { label: 'Wallet', icon: Wallet, path: '/dashboard', testid: 'menu-wallet' },
   { label: 'Deposit', icon: ArrowDownToLine, path: '/dashboard?action=deposit', testid: 'menu-deposit' },
   { label: 'Withdraw', icon: ArrowUpFromLine, path: '/dashboard?action=withdraw', testid: 'menu-withdraw' },
@@ -17,6 +19,7 @@ const MENU_ITEMS = [
 
 export function AppDrawer({ open, onClose }) {
   const router = useRouter()
+  const { t } = useLang()
   const [isAdmin, setIsAdmin] = useState(false)
   useEffect(() => {
     try {
@@ -53,19 +56,23 @@ export function AppDrawer({ open, onClose }) {
               onClick={() => go(item.path)}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-white/70 hover:bg-white/5 hover:text-white transition"
             >
-              <item.icon className="h-4.5 w-4.5 h-[18px] w-[18px] text-[#00FF66]" />
-              <span className="font-medium">{item.label}</span>
+              <item.icon className="h-[18px] w-[18px] text-[#00FF66]" />
+              <span className="font-medium">{t(item.label)}</span>
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-white/5">
+        <div className="p-3 border-t border-white/5 space-y-1">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-xs text-white/40 font-medium">{t('Language')}</span>
+            <LangToggle />
+          </div>
           <button
             data-testid="menu-logout"
             onClick={() => { onClose(); logout(router) }}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-white/50 hover:bg-white/5 hover:text-[#ff3b5c] transition"
           >
             <LogOut className="h-[18px] w-[18px]" />
-            <span className="font-medium">Sign out</span>
+            <span className="font-medium">{t('Sign out')}</span>
           </button>
         </div>
       </div>
@@ -75,10 +82,12 @@ export function AppDrawer({ open, onClose }) {
 
 export function BottomNav({ active }) {
   const router = useRouter()
+  const { t } = useLang()
   const items = [
     { key: 'home', label: 'Home', icon: Home, path: '/home' },
-    { key: 'chart', label: 'Chart', icon: CandlestickChart, path: '/terminal' },
+    { key: 'markets', label: 'Markets', icon: LineChart, path: '/terminal?tab=markets' },
     { key: 'trade', label: 'Trade', icon: ArrowLeftRight, path: '/terminal?tab=trade' },
+    { key: 'positions', label: 'Positions', icon: ListOrdered, path: '/terminal?tab=positions' },
     { key: 'wallet', label: 'Wallet', icon: Wallet, path: '/dashboard' },
   ]
   return (
@@ -91,7 +100,7 @@ export function BottomNav({ active }) {
           className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${active === it.key ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}
         >
           <it.icon className="h-5 w-5" />
-          <span className="text-[10px] font-medium">{it.label}</span>
+          <span className="text-[10px] font-medium">{t(it.label)}</span>
         </button>
       ))}
     </nav>

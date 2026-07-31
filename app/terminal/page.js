@@ -3,10 +3,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createChart, CandlestickSeries, ColorType, createSeriesMarkers } from 'lightweight-charts'
-import { api, positionPnl, notionalUsd, fmtMoney, fmtSignedMoney, fmtPrice, askPrice, bidPrice, logout } from '@/lib/rm'
+import { api, positionPnl, notionalUsd, fmtMoney, fmtSignedMoney, fmtPrice, bidOf, askOf, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
 import { AppDrawer } from '@/components/app-nav'
-import { Wallet, LogOut, LayoutDashboard, X, Menu, Home, CandlestickChart, ArrowLeftRight } from 'lucide-react'
+import { SymbolIcon } from '@/components/symbol-icon'
+import { useLang } from '@/lib/i18n'
+import { Wallet, LogOut, LayoutDashboard, X, Menu, CandlestickChart, ArrowLeftRight, ListOrdered, LineChart } from 'lucide-react'
 
 const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d']
 const INTERVAL_SEC = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
@@ -14,6 +16,7 @@ const LEVERAGES = [1, 2, 5, 10, 20, 50, 100]
 
 const App = () => {
   const router = useRouter()
+  const { t } = useLang()
   const [user, setUser] = useState(null)
   const [symbols, setSymbols] = useState([])
   const [quotes, setQuotes] = useState({})
@@ -30,13 +33,14 @@ const App = () => {
   const [chartError, setChartError] = useState('')
   const [mobileTab, setMobileTab] = useState('chart')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [spread, setSpread] = useState(0.0005)
 
   const chartContainerRef = useRef(null)
   const chartApiRef = useRef(null)
   const seriesRef = useRef(null)
   const markersRef = useRef(null)
   const priceLinesRef = useRef([])
+  const bidLineRef = useRef(null)
+  const askLineRef = useRef(null)
   const lastBarRef = useRef(null)
   const selectedRef = useRef(selected)
   const intervalStateRef = useRef(chartInterval)
@@ -98,9 +102,10 @@ const App = () => {
     if (!token) { router.replace('/'); return }
     try {
       const params = new URLSearchParams(window.location.search)
-      if (params.get('tab') === 'trade') setMobileTab('trade')
+      const tabParam = params.get('tab')
+      if (['trade', 'positions', 'markets'].includes(tabParam)) setMobileTab(tabParam)
       const symParam = params.get('symbol')
-      if (symParam && /^[A-Z]{2,10}$/.test(symParam)) setSelected(symParam)
+      if (symParam && /^[A-Z0-9]{2,10}$/.test(symParam)) setSelected(symParam)
     } catch (e) {}
     let ws = null
     let pollTimer, flushTimer, acctTimer
@@ -133,7 +138,6 @@ const App = () => {
       }
       try {
         const qRes = await api.get('/market/quotes')
-        if (qRes.data.spread) setSpread(qRes.data.spread)
         applyQuotes(qRes.data.quotes)
       } catch (e) {}
       refreshPositions()
@@ -165,7 +169,6 @@ const App = () => {
       pollTimer = setInterval(async () => {
         try {
           const r = await api.get('/market/quotes')
-          if (r.data.spread) setSpread(r.data.spread)
           applyQuotes(r.data.quotes)
         } catch (e) {}
       }, 12000)
@@ -206,10 +209,12 @@ const App = () => {
       seriesRef.current = null
       markersRef.current = null
       priceLinesRef.current = []
+      bidLineRef.current = null
+      askLineRef.current = null
     }
   }, [])
 
-  // ---------- trade markers + entry price lines on chart ----------
+  // ---------- trade markers + entry price lines on chart (no text legends) ----------
   useEffect(() => {
     if (!seriesRef.current) return
     const sec = INTERVAL_SEC[chartInterval] || 3600
@@ -221,7 +226,6 @@ const App = () => {
         position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
         color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
         shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
-        text: `${p.side === 'buy' ? 'BUY' : 'SELL'} ${p.lots}`,
       })
       if (p.closedAt) {
         markers.push({
@@ -229,7 +233,6 @@ const App = () => {
           position: p.side === 'buy' ? 'aboveBar' : 'belowBar',
           color: '#7d8590',
           shape: 'circle',
-          text: `CLOSE ${p.lots}`,
         })
       }
     })
@@ -239,16 +242,22 @@ const App = () => {
         position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
         color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
         shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
-        text: `${p.side === 'buy' ? 'BUY' : 'SELL'} ${p.lots}`,
       })
     })
     markers.sort((a, b) => a.time - b.time)
     try { markersRef.current?.setMarkers(markers) } catch (e) {}
 
-    // entry price lines for open positions on this symbol
+    // entry price lines for open positions (deduped so same-price entries overlap into one line)
     priceLinesRef.current.forEach((pl) => { try { seriesRef.current.removePriceLine(pl) } catch (e) {} })
+    const seen = new Set()
     priceLinesRef.current = positions
       .filter((p) => p.symbol === selected)
+      .filter((p) => {
+        const key = `${p.side}-${p.entryPrice}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
       .map((p) => {
         try {
           return seriesRef.current.createPriceLine({
@@ -257,12 +266,37 @@ const App = () => {
             lineWidth: 1,
             lineStyle: 2,
             axisLabelVisible: true,
-            title: `${p.side.toUpperCase()} ${p.lots}`,
+            title: '',
           })
         } catch (e) { return null }
       })
       .filter(Boolean)
   }, [positions, closedPositions, selected, chartInterval])
+
+  // ---------- live bid/ask lines on chart ----------
+  useEffect(() => {
+    const series = seriesRef.current
+    const q = quotes[selected]
+    if (!series || !q?.price) return
+    const meta = symbols.find((s) => s.symbol === selected)
+    const half = q.bid != null && q.ask != null
+      ? (q.ask - q.bid) / 2
+      : ((q.spreadPips || 1.5) * (meta?.pipSize || 0.0001)) / 2
+    const bid = q.price - half
+    const ask = q.price + half
+    try {
+      if (!askLineRef.current) {
+        askLineRef.current = series.createPriceLine({ price: ask, color: '#00FF66', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'ask' })
+      } else {
+        askLineRef.current.applyOptions({ price: ask })
+      }
+      if (!bidLineRef.current) {
+        bidLineRef.current = series.createPriceLine({ price: bid, color: '#ff3b5c', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'bid' })
+      } else {
+        bidLineRef.current.applyOptions({ price: bid })
+      }
+    } catch (e) {}
+  }, [quotes, selected, symbols])
 
   // ---------- load candles ----------
   useEffect(() => {
@@ -287,20 +321,28 @@ const App = () => {
   // ---------- derived live account ----------
   const floatingPnl = useMemo(() => positions.reduce((sum, p) => {
     const q = quotes[p.symbol]
-    return sum + (q?.price ? positionPnl(p, q.price, spread) : 0)
-  }, 0), [positions, quotes, spread])
+    return sum + (q?.price ? positionPnl(p, q, quotes) : 0)
+  }, 0), [positions, quotes])
   const usedMargin = useMemo(() => positions.reduce((s, p) => s + p.margin, 0), [positions])
   const equity = balance + floatingPnl
   const freeMargin = equity - usedMargin
   const marginLevel = usedMargin > 0 ? (equity / usedMargin) * 100 : null
 
-  const selMeta = symbols.find((s) => s.symbol === selected) || { decimals: 2, name: selected, contractSize: 1, quote: 'USD' }
+  const selMeta = symbols.find((s) => s.symbol === selected) || { decimals: 2, name: selected, contractSize: 1, quote: 'USD', maxLeverage: 100 }
   const selQuote = quotes[selected]
   const lotsNum = Number(lots) || 0
   const midPrice = selQuote?.price || 0
   const contractUnits = lotsNum * (selMeta.contractSize || 1)
-  const orderNotional = notionalUsd(selMeta, midPrice, lotsNum)
+  const orderNotional = notionalUsd(selMeta, midPrice, lotsNum, quotes)
   const requiredMargin = orderNotional / leverage
+  const maxLev = selMeta.maxLeverage || 100
+  const availableLeverages = LEVERAGES.filter((l) => l <= maxLev)
+
+  // clamp leverage to the selected symbol's category limit
+  useEffect(() => {
+    if (leverage > maxLev) setLeverage(maxLev)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, maxLev])
 
   // ---------- actions ----------
   const placeOrder = async (side) => {
@@ -341,6 +383,8 @@ const App = () => {
 
   const cryptoSymbols = symbols.filter((s) => s.type === 'crypto')
   const forexSymbols = symbols.filter((s) => s.type === 'forex')
+  const metalSymbols = symbols.filter((s) => s.type === 'metal')
+  const indexSymbols = symbols.filter((s) => s.type === 'index')
   const stockSymbols = symbols.filter((s) => s.type === 'stock')
 
   const WatchRow = ({ s, testPrefix = 'watchlist' }) => {
@@ -353,11 +397,14 @@ const App = () => {
         onClick={() => pickSymbol(s.symbol)}
         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition ${active ? 'bg-[#00FF66]/10 border border-[#00FF66]/20' : 'hover:bg-white/5 border border-transparent'}`}
       >
-        <div>
-          <div className="text-sm font-semibold">{s.symbol}</div>
-          <div className="text-[11px] text-white/35">{s.name}</div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <SymbolIcon symbol={s.symbol} type={s.type} size={26} />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">{s.symbol}</div>
+            <div className="text-[11px] text-white/35 truncate">{s.name}</div>
+          </div>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <div className="text-sm font-mono">{q?.price ? fmtPrice(q.price, s.decimals) : '—'}</div>
           <div className={`text-[11px] font-mono ${up ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
             {q?.changePercent != null ? `${up ? '+' : ''}${q.changePercent.toFixed(2)}%` : ''}
@@ -369,11 +416,15 @@ const App = () => {
 
   const marketWatchList = (testPrefix) => (
     <>
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-2 pb-1">Crypto</div>
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-2 pb-1">{t('Crypto')}</div>
       {cryptoSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">Forex</div>
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Forex')}</div>
       {forexSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">Stocks</div>
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Metals')}</div>
+      {metalSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Indices')}</div>
+      {indexSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
+      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Stocks')}</div>
       {stockSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
     </>
   )
@@ -386,11 +437,11 @@ const App = () => {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-[#ff3b5c]/5 border border-[#ff3b5c]/15 p-2.5 text-center">
             <div className="text-[10px] text-white/35">SELL (Bid)</div>
-            <div className="font-mono text-sm text-[#ff3b5c]" data-testid="sell-price">{midPrice ? fmtPrice(bidPrice(midPrice, spread), selMeta.decimals) : '—'}</div>
+            <div className="font-mono text-sm text-[#ff3b5c]" data-testid="sell-price">{midPrice ? fmtPrice(bidOf(selQuote), selMeta.decimals) : '—'}</div>
           </div>
           <div className="rounded-lg bg-[#00FF66]/5 border border-[#00FF66]/15 p-2.5 text-center">
             <div className="text-[10px] text-white/35">BUY (Ask)</div>
-            <div className="font-mono text-sm text-[#00FF66]" data-testid="buy-price">{midPrice ? fmtPrice(askPrice(midPrice, spread), selMeta.decimals) : '—'}</div>
+            <div className="font-mono text-sm text-[#00FF66]" data-testid="buy-price">{midPrice ? fmtPrice(askOf(selQuote), selMeta.decimals) : '—'}</div>
           </div>
         </div>
       </div>
@@ -414,9 +465,9 @@ const App = () => {
       </div>
 
       <div>
-        <label className="text-[11px] text-white/40 block mb-1.5">Leverage</label>
+        <label className="text-[11px] text-white/40 block mb-1.5">Leverage <span className="text-white/25">(max 1:{maxLev})</span></label>
         <div className="grid grid-cols-4 gap-1.5">
-          {LEVERAGES.map((l) => (
+          {availableLeverages.map((l) => (
             <button key={l} data-testid={`leverage-${l}`} onClick={() => setLeverage(l)} className={`text-[11px] py-1.5 rounded-md border font-mono transition ${leverage === l ? 'border-[#00FF66]/60 bg-[#00FF66]/10 text-[#00FF66]' : 'border-white/10 text-white/40 hover:text-white'}`}>
               {l}x
             </button>
@@ -431,7 +482,7 @@ const App = () => {
         <div className="flex justify-between"><span className="text-white/35">Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(orderNotional)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Required margin</span><span className="font-mono" data-testid="order-margin">{fmtMoney(requiredMargin)}</span></div>
         <div className="flex justify-between"><span className="text-white/35">Free margin</span><span className="font-mono">{fmtMoney(freeMargin)}</span></div>
-        <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">{(spread * 100).toFixed(2)}%</span></div>
+        <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">{selQuote?.spreadPips != null ? `${selQuote.spreadPips.toFixed(1)} pips` : '—'}</span></div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -478,9 +529,9 @@ const App = () => {
           <tbody className="font-mono">
             {tab === 'open' && positions.map((p) => {
               const q = quotes[p.symbol]
-              const pnl = q?.price ? positionPnl(p, q.price, spread) : 0
+              const pnl = q?.price ? positionPnl(p, q, quotes) : 0
               const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
-              const cur = q?.price ? (p.side === 'buy' ? bidPrice(q.price, spread) : askPrice(q.price, spread)) : null
+              const cur = q?.price ? (p.side === 'buy' ? bidOf(q) : askOf(q)) : null
               return (
                 <tr key={p.id} data-testid={`position-row-${p.id}`} className="border-t border-white/5">
                   <td className="py-2 font-semibold font-sans">{p.symbol}</td>
@@ -610,8 +661,8 @@ const App = () => {
             </div>
           </div>
 
-          {/* chart (hidden on mobile when Trade tab active) */}
-          <div className={`flex-1 relative min-h-0 ${mobileTab === 'trade' ? 'hidden md:block' : ''}`}>
+          {/* chart (hidden on mobile when another tab is active) */}
+          <div className={`flex-1 relative min-h-0 ${mobileTab !== 'chart' ? 'hidden md:block' : ''}`}>
             <div ref={chartContainerRef} className="absolute inset-0" data-testid="chart-container" />
             {chartError && (
               <div className="absolute inset-0 flex items-center justify-center text-white/30 text-sm bg-black/60">{chartError}</div>
@@ -626,8 +677,18 @@ const App = () => {
             </div>
           </div>
 
+          {/* mobile POSITIONS view */}
+          <div data-testid="mobile-positions-view" className={`md:hidden flex-1 min-h-0 overflow-hidden ${mobileTab === 'positions' ? 'flex flex-col' : 'hidden'}`}>
+            {positionsPanel}
+          </div>
+
+          {/* mobile MARKETS view */}
+          <div data-testid="mobile-markets-view" className={`md:hidden flex-1 min-h-0 overflow-y-auto p-2 ${mobileTab === 'markets' ? 'block' : 'hidden'}`}>
+            {marketWatchList('mobile-markets')}
+          </div>
+
           {/* positions (desktop / mobile chart tab) */}
-          <div className={`h-56 shrink-0 border-t border-white/5 ${mobileTab === 'trade' ? 'hidden md:flex' : 'flex'} flex-col`}>
+          <div className={`h-56 shrink-0 border-t border-white/5 ${mobileTab === 'chart' ? 'flex' : 'hidden md:flex'} flex-col`}>
             {positionsPanel}
           </div>
         </main>
@@ -640,21 +701,25 @@ const App = () => {
 
       {/* MOBILE BOTTOM NAV */}
       <nav data-testid="mobile-bottom-nav" className="md:hidden h-16 shrink-0 border-t border-white/10 bg-black flex items-stretch z-30">
-        <button data-testid="bottomnav-home" onClick={() => router.push('/home')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
-          <Home className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Home</span>
-        </button>
         <button data-testid="bottomnav-chart" onClick={() => setMobileTab('chart')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'chart' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
           <CandlestickChart className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Chart</span>
+          <span className="text-[10px] font-medium">{t('Chart')}</span>
         </button>
         <button data-testid="bottomnav-trade" onClick={() => setMobileTab('trade')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'trade' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
           <ArrowLeftRight className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Trade</span>
+          <span className="text-[10px] font-medium">{t('Trade')}</span>
+        </button>
+        <button data-testid="bottomnav-positions" onClick={() => setMobileTab('positions')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'positions' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
+          <ListOrdered className="h-5 w-5" />
+          <span className="text-[10px] font-medium">{t('Positions')}</span>
+        </button>
+        <button data-testid="bottomnav-markets" onClick={() => setMobileTab('markets')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'markets' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
+          <LineChart className="h-5 w-5" />
+          <span className="text-[10px] font-medium">{t('Markets')}</span>
         </button>
         <button data-testid="bottomnav-wallet" onClick={() => router.push('/dashboard')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
           <Wallet className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Wallet</span>
+          <span className="text-[10px] font-medium">{t('Wallet')}</span>
         </button>
       </nav>
 

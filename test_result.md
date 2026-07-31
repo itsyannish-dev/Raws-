@@ -216,6 +216,40 @@ frontend:
         agent: "main"
         comment: "Verified $10,000 mock deposit via UI screenshot; summary cards + tx history render."
 
+  - task: "Dashboard v2: NOWPayments crypto deposit flow + withdrawal with wallet address"
+    implemented: true
+    working: "NA"
+    file: "app/dashboard/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Rewritten: deposit form with amount + pay currency select (/api/payments/currencies), creates NOWPayments payment, modal with payAmount/payAddress/QR/copy + 10s status polling. Withdrawal requires wallet address + optional network. Tx history shows waiting_payment/failed statuses; waiting deposits reopen modal. Verified via screenshot: real payment created ($50 -> 49.97 USDTTRC20)."
+  - task: "Terminal chart: bid/ask lines, markers without text, category leverage UI, metals/indices watchlist, mobile Positions/Markets tabs"
+    implemented: true
+    working: "NA"
+    file: "app/terminal/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Live bid (red) / ask (green) dotted price lines. Buy/sell markers without text; entry lines deduped by side+price. Leverage buttons filtered by symbol maxLeverage with auto-clamp. Watchlist: Crypto/Forex/Metals/Indices/Stocks with icons. Mobile bottom nav: Chart/Trade/Positions/Markets/Wallet with ?tab= deep links. PnL/bid/ask from server pip-spread quotes. Verified via screenshots."
+  - task: "i18n PT/EN toggle + symbol icons + public site hamburger menu"
+    implemented: true
+    working: "NA"
+    file: "lib/i18n.js, components/symbol-icon.js, app/page.js, app/home/page.js, components/app-nav.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "useLang hook + LangToggle (EN default, PT via localStorage rm_lang). Landing translated + mobile hamburger drawer. SymbolIcon: crypto logos (coincap), stock logos (clearbit), forex flags, metal/index badges across landing/home/terminal. Home: metal/index filters. Verified via screenshots (PT toggle works)."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
