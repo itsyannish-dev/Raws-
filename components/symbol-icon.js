@@ -14,12 +14,12 @@ const FLAGS = {
   USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', JPY: '🇯🇵',
   AUD: '🇦🇺', NZD: '🇳🇿', CAD: '🇨🇦', CHF: '🇨🇭',
 }
-const INDEX_LABELS = { US500: 'S&P', US100: 'NDX', US30: 'DJI' }
+const INDEX_LABELS = { US500: 'S&P', US100: 'NDX', US30: 'DJI', US2000: 'RUT', GER40: 'DAX', UK100: 'FTSE', JP225: 'NKY' }
 
 function FallbackBadge({ symbol, size }) {
   return (
     <div
-      className="rounded-full bg-white/5 text-white/60 flex items-center justify-center font-bold shrink-0"
+      className="rounded-full bg-gray-500/15 text-gray-500 flex items-center justify-center font-bold shrink-0"
       style={{ height: size, width: size, fontSize: size * 0.32 }}
     >
       {symbol.slice(0, 2)}

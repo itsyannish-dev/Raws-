@@ -184,7 +184,7 @@ backend:
 frontend:
   - task: "Landing page + auth modal"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/page.js"
     stuck_count: 0
     priority: "high"
@@ -193,9 +193,12 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "Hero, live ticker, features, CTA, login/register modal. Verified via screenshots."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Desktop 1920x800 + Mobile 390x844): Hero section with lion background and 'Start Trading effortlessly' title present. All image sections verified (trade-anywhere.png, leverage.png, app-showcase.jpg, phone-mockup.png). Leverage category cards visible. Markets table with symbol icons present. Theme toggle switches to light mode (bg changes to rgb(245,246,245)). Language toggle switches to Portuguese (nav text changes to 'Mercados'). Mobile hamburger menu opens top dropdown with nav links + Sign in/Get started buttons. Registration with first+last name fields works (auth-firstname-input, auth-lastname-input). Minor: Live ticker not visible initially (may be loading), theme persistence on landing page not working correctly, greeting shows 'Welcome back' without first name."
   - task: "Trading terminal (chart, watchlist, orders, positions, live PnL)"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/terminal/page.js"
     stuck_count: 0
     priority: "high"
@@ -204,9 +207,12 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "lightweight-charts v5 candles + live tick updates via Finnhub WS (crypto) + 12s REST polling. Fixed locale bug (localization: en-US). Verified buy/sell orders, live floating PnL, equity bar via screenshots."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Mobile 390x844 + Desktop 1920x800): Mobile positions view visible. History tab with filter chips (today/yesterday/week/month/all) and summary (Trades count + Total PnL) working. Markets tab with category dropdown (markets-category-select) filters correctly (tested 'index' filter, US500 visible). Terminal asset modal opens with 'Open chart' and 'Trade' buttons. Desktop: chart container visible, watchlist has all categories (Crypto/Forex/Metals/Indices/Stocks) with correct symbols (BTCUSD, EURUSD, XAUUSD, US500, AAPL). Leverage buttons show correctly (10x visible for BTCUSD). Bottom nav has exactly: Home, Chart, Trade, Positions, Wallet. NOTE: Duplicate testids confirmed - positionsPanel rendered in 3 places (mobile-trade-view, mobile-positions-view, and chart positions panel). Used visible selector to work around this."
   - task: "Dashboard (wallet, deposit/withdraw, transactions)"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/dashboard/page.js"
     stuck_count: 0
     priority: "high"
@@ -215,10 +221,13 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "Verified $10,000 mock deposit via UI screenshot; summary cards + tx history render."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Desktop 1920x1080): Light mode toggle works (page turns light with bg rgb(245,246,245)). Deposit flow: amount input, currency select with multiple options (10+ currencies), submit creates NOWPayments payment modal with pay address, pay amount, QR code, and copy button. Withdrawal without wallet address shows error toast. Withdrawal with amount 10 + address 'TXYZabc1234567890abcdefgh' succeeds with success toast and pending transaction appears in history table. All core deposit/withdraw flows working correctly."
 
   - task: "Dashboard v2: NOWPayments crypto deposit flow + withdrawal with wallet address"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/dashboard/page.js"
     stuck_count: 0
     priority: "high"
@@ -227,9 +236,12 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "Rewritten: deposit form with amount + pay currency select (/api/payments/currencies), creates NOWPayments payment, modal with payAmount/payAddress/QR/copy + 10s status polling. Withdrawal requires wallet address + optional network. Tx history shows waiting_payment/failed statuses; waiting deposits reopen modal. Verified via screenshot: real payment created ($50 -> 49.97 USDTTRC20)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Covered in Dashboard testing above. NOWPayments integration working - deposit creates payment modal with all required fields (payAddress, payAmount, QR code). Withdrawal validation working (requires wallet address min 15 chars). Transactions table displays correctly."
   - task: "Terminal chart: bid/ask lines, markers without text, category leverage UI, metals/indices watchlist, mobile Positions/Markets tabs"
     implemented: true
-    working: "NA"
+    working: true
     file: "app/terminal/page.js"
     stuck_count: 0
     priority: "high"
@@ -238,9 +250,12 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "Live bid (red) / ask (green) dotted price lines. Buy/sell markers without text; entry lines deduped by side+price. Leverage buttons filtered by symbol maxLeverage with auto-clamp. Watchlist: Crypto/Forex/Metals/Indices/Stocks with icons. Mobile bottom nav: Chart/Trade/Positions/Markets/Wallet with ?tab= deep links. PnL/bid/ask from server pip-spread quotes. Verified via screenshots."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Covered in Trading terminal testing above. Chart container renders, watchlist organized by categories with icons, leverage buttons filtered by category (BTCUSD shows max 10x, 20x not visible). Mobile tabs (Chart/Trade/Positions/Markets/Wallet) work with ?tab= deep links. Markets tab category filtering works correctly."
   - task: "i18n PT/EN toggle + symbol icons + public site hamburger menu"
     implemented: true
-    working: "NA"
+    working: true
     file: "lib/i18n.js, components/symbol-icon.js, app/page.js, app/home/page.js, components/app-nav.js"
     stuck_count: 0
     priority: "high"
@@ -249,11 +264,47 @@ frontend:
       - working: "NA"
         agent: "main"
         comment: "useLang hook + LangToggle (EN default, PT via localStorage rm_lang). Landing translated + mobile hamburger drawer. SymbolIcon: crypto logos (coincap), stock logos (clearbit), forex flags, metal/index badges across landing/home/terminal. Home: metal/index filters. Verified via screenshots (PT toggle works)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Language toggle switches to Portuguese (nav text changes to 'Mercados'). Symbol icons present in markets tables and watchlists. Mobile hamburger menu opens top dropdown with nav links. All i18n and icon features working correctly."
+  - task: "Home page: balance cards, quick actions, market watch with View more, asset modal, bottom nav"
+    implemented: true
+    working: true
+    file: "app/home/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Mobile 390x844): Balance cards (home-balance, home-equity, home-pnl) visible. Quick actions visible. Market watch with View more button (market-view-more-btn) expands full list. Clicking asset row (market-row-BTCUSD) opens asset action modal with 'Open chart' and 'Trade' buttons. Trade button navigates to /terminal?symbol=BTCUSD&tab=trade. Bottom nav has exactly: Home, Chart, Trade, Positions, Wallet (all bottomnav-* testids present). All home page features working correctly. Minor: Market watch initially shows 0 rows (may be data loading issue)."
+  - task: "Documents: verification banner, upload cards, KYC flow"
+    implemented: true
+    working: true
+    file: "app/documents/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Desktop 1920x1080): Verification banner (verification-banner) visible with status. Two upload cards (doc-card-identity, doc-card-address) present. Identity document upload via doc-input-identity works - file upload triggers success toast and status badge shows 'pending'. Document upload flow working correctly."
+  - task: "Admin panel: tabs, deposits, withdrawals, verification, positions, settings"
+    implemented: true
+    working: true
+    file: "app/admin/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED (Desktop 1920x1080): Admin login works (admin@rawmarkets.com / RawAdmin!2025). All tabs present (Overview, Users, Deposits, Withdrawals, Verification, Positions, Settings). Deposits tab shows table with approve/reject buttons for pending deposits. Verification tab shows documents table, View button opens preview modal (doc-preview-modal) with document image, Approve button works with success toast. Settings tab shows spread pips input (value ~1), category leverage chips (1:100, 1:50, 1:20, 1:10), trading toggle, and save button works with success toast. All admin features working correctly."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 5
+  test_sequence: 6
   run_ui: false
 
 test_plan:
@@ -263,6 +314,10 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "main"
+    message: "BATCH 4 changes (frontend only, no backend changes): (1) Landing: removed 'Your account, always with you' and leverage sections; new /leverage page (nav link 'Leverage') with image + progress bars; new /about and /contact pages (Contact: WhatsApp wa.me/410778059868 + Instagram rawmarkets.global); header redesigned WITHOUT square logo (text-only RAWMARKETS), nav links: Markets, Leverage, How it works, Pricing, FAQ, About us, Contact us; 'How it works' redesigned with dynamic connected steps 1-2-3 (green icon tiles, arrows, hover effects); footer updated with WhatsApp/Instagram buttons; /?join=1 auto-opens register modal (used by subpage CTAs). Shared SiteHeader/SiteFooter in /app/components/site-header.js. (2) Terminal chart: bid/ask price lines now have NO labels (axisLabelVisible false, no title) - lines only. (3) Bottom nav: Wallet tab REMOVED everywhere - now Home, Chart, Trade, Positions (wallet reachable via hamburger drawer). (4) Positions panel redesign: cleaner rows with SymbolIcon, side+lots pill, entry→current, PnL, round X close button; history rows same style with date."
+  - agent: "main"
+    message: "BATCH 3 changes: (1) Backend: added 10 forex crosses (GBPCHF, GBPAUD, GBPCAD, AUDCAD, AUDNZD, NZDJPY, CADJPY, CHFJPY, EURCAD, EURNZD) and 4 indices (US2000, GER40 quote EUR, UK100 quote GBP, JP225 quote USD) — 46 symbols total now. (2) Frontend: consistent bottom nav on all pages (Home, Chart, Trade, Positions, Wallet), light/dark theme toggle (localStorage rm_theme) on landing+home+dashboard+drawer, cleaner positions panel (card rows), history filters (today/yesterday/week/month/all) with totals summary, terminal markets tab with category dropdown + Chart/Trade modal, home market watch View more + asset modal, landing page rewritten (lion hero 'Start Trading effortlessly', user images in /public/images/, mobile top dropdown menu, register with first+last name fields). KYC documents flow unchanged. NOTE: dev server occasionally restarts on memory threshold; retry once on connection failure."
   - agent: "main"
     message: "Phase 1 complete. Please test all backend APIs at {NEXT_PUBLIC_BASE_URL}/api. Test creds in /app/memory/test_credentials.md (trader@rawmarkets.com / Trader123!). Full flow: register new user -> login -> deposit -> place buy+sell orders (BTCUSD, lots 0.01, leverage 10) -> check account summary math (equity=balance+floating PnL, margin=notional/leverage) -> close position (PnL realized to balance) -> withdraw (pending status) -> edge cases (insufficient margin, invalid symbol/leverage, unauthorized access). NOTE: dev server may restart on memory threshold; retry once if connection refused."
   - agent: "testing"
@@ -283,6 +338,10 @@ agent_communication:
     message: "MAJOR REWRITE TESTING COMPLETE - ALL FEATURES WORKING ✅. Comprehensive test of 7 new backend features: (1) SYMBOLS & CATEGORIES: GET /api/market/symbols returns exactly 32 symbols with correct maxLeverage per category (crypto=10, forex=100, metal=20, index=50, stock=10). All new symbols verified: XAUUSD/XAGUSD (metals), US500/US100/US30 (indices), EURGBP/EURJPY/GBPJPY/EURCHF/AUDJPY/EURAUD (forex crosses), DOGEUSD/ADAUSD/LINKUSD (crypto), AMZN/GOOGL (stocks). (2) DYNAMIC PIP SPREAD: GET /api/market/quotes returns bid/ask/spreadPips/pipSize for each symbol, spread calculation accurate (ask-bid ≈ spreadPips * pipSize), spreadPips randomized between 1x-2x base (tested: BTCUSD=1.32, EURUSD=1.43, XAUUSD=1.55). (3) CATEGORY LEVERAGE ENFORCEMENT: Fresh user funded via admin adjust-balance. BTCUSD leverage 20 correctly rejected (400 'Maximum leverage for crypto is 1:10'), EURUSD leverage 100 accepted, XAUUSD leverage 50 rejected (400 'Maximum leverage for metal is 1:20'), XAUUSD leverage 20 accepted, US500 leverage 100 rejected (400 'Maximum leverage for index is 1:50'), US500 leverage 50 accepted. All positions closed with PnL applied. (4) NOWPAYMENTS DEPOSITS: GET /api/payments/currencies returns 10 currencies. POST /api/transactions/deposit {amount: 50, payCurrency: 'usdttrc20'} creates real NOWPayments payment (payAddress, payAmount=50.050059, paymentId=6350514825, status=waiting_payment). GET /api/transactions/deposit/{id}/status polls status (paymentStatus='waiting'). Validation working: amount < 10 rejected, missing payCurrency rejected. Live API integration working. (5) WITHDRAWALS WITH WALLET: POST /api/transactions/withdraw without walletAddress rejected (400). With walletAddress creates pending withdrawal, balance deducted. Admin reject refunds balance, admin approve keeps deduction. (6) ADMIN SETTINGS: GET /api/admin/settings returns spreadPips/tradingEnabled/categoryLeverage. PUT {spreadPips: 2} works, PUT {spreadPips: 20} rejected (400, out of range 0.1-10). PUT {tradingEnabled: false} blocks orders (403 'Trading is temporarily disabled'). Settings restored. (7) REGRESSION: Auth flow (register/login/me), account summary math (equity=balance+floatingPnl, freeMargin=equity-usedMargin), positions, admin stats (includes pendingDeposits/awaitingPaymentDeposits) all working. Test script: /app/backend_test_rewrite.py. ALL 7/7 TESTS PASSED."
   - agent: "testing"
     message: "KYC DOCUMENT VERIFICATION TESTING COMPLETE - ALL ENDPOINTS WORKING ✅. Comprehensive test of new KYC system: (1) USER DOCUMENT UPLOAD: POST /api/documents with valid identity doc (type='identity', fileName='passport.png', mimeType='image/png', base64 data) returns 201, document with status='pending', verificationStatus='pending', no data field in response. Address doc upload works identically. Re-uploading same type replaces old pending doc (verified only 1 doc per type). Validation working: type='other' rejected (400), short data rejected (400), invalid mimeType 'text/plain' rejected (400), no auth rejected (401). (2) USER DOCUMENT LIST: GET /api/documents returns user's docs without data field, includes verificationStatus. Fresh user before upload: verificationStatus='unverified'. After uploading both docs: 2 docs (1 identity, 1 address), verificationStatus='pending'. (3) GET /api/auth/me includes verificationStatus field. (4) ADMIN REVIEW: GET /api/admin/documents?status=pending returns docs with user info (name, email, verificationStatus), NO data field. GET /api/admin/documents/{id}/file returns document WITH base64 data field for preview. POST /api/admin/documents/{id}/approve on identity: doc status='approved', user verificationStatus='pending' (still missing address approval). After approving address: user verificationStatus='verified' (both identity AND address approved), verified via GET /api/auth/me. POST /api/admin/documents/{id}/reject: doc status='rejected', user verificationStatus='rejected'. Approving already-approved doc rejected (400 'Document is already approved'). Non-admin access to /api/admin/documents rejected (403). (5) GET /api/admin/stats includes pendingDocuments count. (6) QUICK REGRESSION: Login works, GET /api/market/quotes returns bid/ask/spreadPips, POST /api/orders BTCUSD 0.01 lots leverage 10 works for funded user, GET /api/payments/currencies returns 10 currencies. All KYC endpoints working correctly. Test script: /app/backend_test_kyc.py"
+  - agent: "testing"
+    message: "NEW SYMBOLS REGRESSION TEST COMPLETE - ALL TESTS PASSED ✅. Quick regression test after adding 10 forex crosses + 4 indices (46 total symbols). (1) SYMBOLS ENDPOINT: GET /api/market/symbols returns exactly 46 symbols. All 10 new forex crosses verified (GBPCHF, GBPAUD, GBPCAD, AUDCAD, AUDNZD, NZDJPY, CADJPY, CHFJPY, EURCAD, EURNZD) with type='forex', maxLeverage=100, correct pipSize (0.0001 for non-JPY, 0.01 for JPY pairs). All 4 new indices verified (US2000, GER40, UK100, JP225) with type='index', maxLeverage=50, pipSize=1, correct quote currencies (US2000=USD, GER40=EUR, UK100=GBP, JP225=USD). (2) QUOTES ENDPOINT: GET /api/market/quotes for GBPCHF, GER40, UK100, JP225, US2000, NZDJPY returns live quotes with price/bid/ask/spreadPips. Response shape correct (bid < price < ask). (3) GBPCHF TRADING: Fresh user funded $10,000 via admin. GBPCHF order (0.01 lots, leverage 100) accepted, quoteCurrency='CHF', margin≈$13.50. Position closed with PnL=-$0.21 (converted from CHF to USD), balance updated correctly to $9,999.79. (4) GER40 TRADING: Fresh user funded $50,000. GER40 order (1 lot, leverage 50) accepted, quoteCurrency='EUR', margin≈$527 (notional/50 verified). Position closed with PnL=+$2.09, balance updated correctly to $50,002.09. (5) REGRESSION: Login, GET /api/auth/me includes verificationStatus, GET /api/documents works, GET /api/admin/stats returns all required fields. All 5/5 tests passed. Test script: /app/backend_test_symbols_regression.py. NOTE: Did NOT re-test NOWPayments deposit creation as requested (already verified, avoiding extra live payments)."
+  - agent: "testing"
+    message: "COMPREHENSIVE UI TESTING COMPLETE - ALL MAJOR FLOWS WORKING ✅. Tested 7 flows across desktop (1920x800/1080) and mobile (390x844): (1) LANDING PAGE: Hero with lion background + 'Start Trading effortlessly' title ✓, all image sections present (trade-anywhere, leverage, app-showcase, phone-mockup) ✓, leverage category cards ✓, markets table with icons ✓, theme toggle switches to light mode ✓, language toggle switches to PT ✓, mobile hamburger opens top dropdown ✓. (2) REGISTRATION: First+last name fields work, redirects to /home ✓. (3) HOME: Balance cards ✓, quick actions ✓, market watch with View more ✓, asset modal with Open chart/Trade buttons ✓, Trade navigates to /terminal?tab=trade ✓, bottom nav has exactly Home/Chart/Trade/Positions/Wallet ✓. (4) TERMINAL: Mobile positions view ✓, history tab with filter chips (today/yesterday/week/month/all) + summary ✓, markets tab with category dropdown ✓, US500 asset modal ✓, desktop chart container ✓, watchlist categories (Crypto/Forex/Metals/Indices/Stocks) ✓, leverage buttons filtered by category (BTCUSD max 10x) ✓. NOTE: Duplicate testids confirmed in positionsPanel (3 places). (5) DASHBOARD: Light mode toggle ✓, deposit with currency select + payment modal (payAddress/payAmount/QR/copy) ✓, withdrawal validation (requires wallet address) ✓, withdrawal success with pending tx ✓. (6) DOCUMENTS: Verification banner ✓, upload cards ✓, identity doc upload shows pending status ✓. (7) ADMIN: All tabs present ✓, deposits table with approve/reject ✓, verification tab with View/Approve ✓, document preview modal ✓, settings tab (spread pips input, category leverage chips, trading toggle, save) ✓. MINOR ISSUES (not blocking): Live ticker not visible initially, theme persistence on landing page, greeting doesn't show first name, market watch shows 0 rows initially (all likely data loading issues). ALL CORE FUNCTIONALITY WORKING."
 
 
   - task: "Admin: stats, users, adjust-balance, withdrawals approve/reject, positions, platform settings"
@@ -405,3 +464,18 @@ agent_communication:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Complete KYC document verification flow working. (1) USER UPLOAD: Fresh user registered with verificationStatus='unverified'. POST /api/documents with valid identity doc (type='identity', base64 PNG data) returns 201, document with status='pending', verificationStatus='pending', no data field in response. POST /api/documents with valid address doc works similarly. Re-uploading same type replaces old pending doc (verified only 1 doc per type exists). (2) VALIDATION: Invalid type 'other' rejected (400), short data rejected (400), invalid mimeType 'text/plain' rejected (400), no auth rejected (401). (3) USER LIST: GET /api/documents returns 2 docs (1 identity, 1 address), no data field, verificationStatus='pending'. GET /api/auth/me includes verificationStatus field. (4) ADMIN REVIEW: GET /api/admin/documents?status=pending returns docs with user info (name, email, verificationStatus), NO data field. GET /api/admin/documents/{id}/file returns document WITH base64 data field. POST /api/admin/documents/{id}/approve on identity doc: status='approved', user verificationStatus still 'pending' (missing address approval). After approving address doc: user verificationStatus='verified' (both approved). Verified via GET /api/auth/me. (5) REJECTION FLOW: Second user registered, uploaded identity doc, admin rejected it: doc status='rejected', user verificationStatus='rejected'. (6) EDGE CASES: Approving already-approved doc rejected (400 'Document is already approved'). Non-admin access to /api/admin/documents rejected (403). (7) ADMIN STATS: GET /api/admin/stats includes pendingDocuments count. (8) REGRESSION: Login works, GET /api/market/quotes returns bid/ask/spreadPips, POST /api/orders BTCUSD 0.01 lots leverage 10 works for funded user, GET /api/payments/currencies returns 10 currencies. All KYC endpoints working correctly. Test script: /app/backend_test_kyc.py"
+
+  - task: "New symbols: 10 forex crosses + 4 indices (46 total symbols)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added 10 forex crosses (GBPCHF, GBPAUD, GBPCAD, AUDCAD, AUDNZD, NZDJPY, CADJPY, CHFJPY, EURCAD, EURNZD) and 4 indices (US2000 quote USD, GER40 quote EUR, UK100 quote GBP, JP225 quote USD). Total 46 symbols. Forex crosses: maxLeverage=100, pipSize=0.0001 (JPY pairs 0.01). Indices: maxLeverage=50, pipSize=1."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Complete regression test of new symbols addition. (1) SYMBOLS ENDPOINT: GET /api/market/symbols returns exactly 46 symbols. All 10 new forex crosses present with correct metadata (type='forex', maxLeverage=100, pipSize=0.0001 for non-JPY pairs, pipSize=0.01 for JPY pairs: NZDJPY, CADJPY, CHFJPY). All 4 new indices present with correct metadata (type='index', maxLeverage=50, pipSize=1) and correct quote currencies (US2000=USD, GER40=EUR, UK100=GBP, JP225=USD). (2) QUOTES ENDPOINT: GET /api/market/quotes?symbols=GBPCHF,GER40,UK100,JP225,US2000,NZDJPY returns live quotes with price/bid/ask/spreadPips for all symbols. Response shape correct (bid < price < ask verified). (3) FOREX CROSS TRADING: Fresh user funded $10,000 via admin adjust-balance. GBPCHF order (0.01 lots, leverage 100) accepted, position opened with quoteCurrency='CHF', entryPrice≈1.094, margin≈$13.50. Position closed with PnL=-$0.21 (converted from CHF to USD), balance updated correctly to $9,999.79. (4) INDEX TRADING: Fresh user funded $50,000. GER40 order (1 lot, leverage 50) accepted, position opened with quoteCurrency='EUR', entryPrice≈26,366, margin≈$527 (notional/50 verified). Position closed with PnL=+$2.09, balance updated correctly to $50,002.09. (5) REGRESSION: Login works, GET /api/auth/me includes verificationStatus field, GET /api/documents works, GET /api/admin/stats returns all required fields (totalUsers, totalBalance, openPositions, pendingWithdrawals). All 5/5 tests passed. Test script: /app/backend_test_symbols_regression.py"

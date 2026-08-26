@@ -8,7 +8,7 @@ import { Toaster, toast } from 'sonner'
 import { AppDrawer } from '@/components/app-nav'
 import { SymbolIcon } from '@/components/symbol-icon'
 import { useLang } from '@/lib/i18n'
-import { Wallet, LogOut, LayoutDashboard, X, Menu, CandlestickChart, ArrowLeftRight, ListOrdered, LineChart } from 'lucide-react'
+import { Wallet, LogOut, LayoutDashboard, X, Menu, CandlestickChart, ArrowLeftRight, ListOrdered, LineChart, Home as HomeIcon } from 'lucide-react'
 
 const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d']
 const INTERVAL_SEC = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
@@ -29,6 +29,9 @@ const App = () => {
   const [leverage, setLeverage] = useState(10)
   const [placing, setPlacing] = useState(false)
   const [tab, setTab] = useState('open')
+  const [histFilter, setHistFilter] = useState('all')
+  const [marketCat, setMarketCat] = useState('all')
+  const [pickedAsset, setPickedAsset] = useState(null)
   const [closingId, setClosingId] = useState(null)
   const [chartError, setChartError] = useState('')
   const [mobileTab, setMobileTab] = useState('chart')
@@ -286,12 +289,12 @@ const App = () => {
     const ask = q.price + half
     try {
       if (!askLineRef.current) {
-        askLineRef.current = series.createPriceLine({ price: ask, color: '#00FF66', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'ask' })
+        askLineRef.current = series.createPriceLine({ price: ask, color: '#00FF66', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
       } else {
         askLineRef.current.applyOptions({ price: ask })
       }
       if (!bidLineRef.current) {
-        bidLineRef.current = series.createPriceLine({ price: bid, color: '#ff3b5c', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'bid' })
+        bidLineRef.current = series.createPriceLine({ price: bid, color: '#ff3b5c', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
       } else {
         bidLineRef.current.applyOptions({ price: bid })
       }
@@ -502,76 +505,116 @@ const App = () => {
     </div>
   )
 
+  const HIST_FILTERS = [
+    { k: 'today', l: t('Today') },
+    { k: 'yesterday', l: t('Yesterday') },
+    { k: 'week', l: t('This week') },
+    { k: 'month', l: t('This month') },
+    { k: 'all', l: t('All') },
+  ]
+  const filterHistory = (list, f) => {
+    if (f === 'all') return list
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    return list.filter((p) => {
+      if (!p.closedAt) return false
+      const c = new Date(p.closedAt)
+      if (f === 'today') return c >= today
+      if (f === 'yesterday') {
+        const y = new Date(today); y.setDate(y.getDate() - 1)
+        return c >= y && c < today
+      }
+      if (f === 'week') {
+        const w = new Date(today); w.setDate(w.getDate() - ((w.getDay() + 6) % 7))
+        return c >= w
+      }
+      if (f === 'month') return c >= new Date(now.getFullYear(), now.getMonth(), 1)
+      return true
+    })
+  }
+  const histList = filterHistory(closedPositions, histFilter)
+  const histTotal = histList.reduce((s, p) => s + (p.pnl || 0), 0)
+  const histWins = histList.filter((p) => (p.pnl || 0) > 0).length
+
   const positionsPanel = (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-1 px-3 pt-2 shrink-0">
         <button data-testid="tab-open-positions" onClick={() => setTab('open')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'open' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
-          Open positions ({positions.length})
+          {t('Positions')} ({positions.length})
         </button>
         <button data-testid="tab-history" onClick={() => setTab('history')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'history' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
           History ({closedPositions.length})
         </button>
       </div>
-      <div className="flex-1 overflow-auto px-3 pb-2">
-        <table className="w-full text-xs min-w-[560px]">
-          <thead>
-            <tr className="text-white/30 text-left">
-              <th className="py-2 font-medium">Symbol</th>
-              <th className="font-medium">Side</th>
-              <th className="font-medium text-right">Lots</th>
-              <th className="font-medium text-right">Entry</th>
-              <th className="font-medium text-right">{tab === 'open' ? 'Current' : 'Close'}</th>
-              <th className="font-medium text-right">Margin</th>
-              <th className="font-medium text-right">PnL</th>
-              <th className="font-medium text-right">{tab === 'open' ? '' : 'Closed at'}</th>
-            </tr>
-          </thead>
-          <tbody className="font-mono">
-            {tab === 'open' && positions.map((p) => {
-              const q = quotes[p.symbol]
-              const pnl = q?.price ? positionPnl(p, q, quotes) : 0
-              const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
-              const cur = q?.price ? (p.side === 'buy' ? bidOf(q) : askOf(q)) : null
-              return (
-                <tr key={p.id} data-testid={`position-row-${p.id}`} className="border-t border-white/5">
-                  <td className="py-2 font-semibold font-sans">{p.symbol}</td>
-                  <td><span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side}</span></td>
-                  <td className="text-right">{p.lots}</td>
-                  <td className="text-right">{fmtPrice(p.entryPrice, meta.decimals)}</td>
-                  <td className="text-right">{cur ? fmtPrice(cur, meta.decimals) : '—'}</td>
-                  <td className="text-right text-white/50">{fmtMoney(p.margin)}</td>
-                  <td className={`text-right font-semibold ${pnl >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(pnl)}</td>
-                  <td className="text-right">
-                    <button data-testid={`close-position-${p.id}`} disabled={closingId === p.id} onClick={() => closePosition(p.id)} className="inline-flex items-center gap-1 text-[11px] font-sans font-semibold border border-white/15 hover:border-[#ff3b5c]/60 hover:text-[#ff3b5c] rounded-md px-2 py-1 transition disabled:opacity-40">
-                      <X className="h-3 w-3" /> {closingId === p.id ? 'Closing…' : 'Close'}
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-            {tab === 'open' && positions.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-white/25 font-sans">No open positions. Place your first trade →</td></tr>
-            )}
-            {tab === 'history' && closedPositions.map((p) => {
-              const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
-              return (
-                <tr key={p.id} className="border-t border-white/5">
-                  <td className="py-2 font-semibold font-sans">{p.symbol}</td>
-                  <td><span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side}</span></td>
-                  <td className="text-right">{p.lots}</td>
-                  <td className="text-right">{fmtPrice(p.entryPrice, meta.decimals)}</td>
-                  <td className="text-right">{fmtPrice(p.closePrice, meta.decimals)}</td>
-                  <td className="text-right text-white/50">{fmtMoney(p.margin)}</td>
-                  <td className={`text-right font-semibold ${(p.pnl || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(p.pnl)}</td>
-                  <td className="text-right text-white/40">{p.closedAt ? new Date(p.closedAt).toLocaleString() : ''}</td>
-                </tr>
-              )
-            })}
-            {tab === 'history' && closedPositions.length === 0 && (
-              <tr><td colSpan={8} className="py-8 text-center text-white/25 font-sans">No trade history yet.</td></tr>
-            )}
-          </tbody>
-        </table>
+
+      {tab === 'history' && (
+        <div className="px-3 pt-2 shrink-0">
+          <div className="flex gap-1 overflow-x-auto pb-1" data-testid="history-filters">
+            {HIST_FILTERS.map((f) => (
+              <button key={f.k} data-testid={`hist-filter-${f.k}`} onClick={() => setHistFilter(f.k)} className={`px-3 py-1 text-[11px] rounded-full font-medium whitespace-nowrap transition ${histFilter === f.k ? 'bg-[#00FF66] text-black' : 'bg-white/5 text-white/40 hover:text-white'}`}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+          <div data-testid="history-summary" className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/5 px-3.5 py-2 mt-1.5 text-[11px]">
+            <span className="text-white/40">{t('Trades')}: <span className="text-white font-mono">{histList.length}</span>{histList.length > 0 && <span className="text-white/25 ml-2">({histWins}W / {histList.length - histWins}L)</span>}</span>
+            <span className="text-white/40">{t('Total PnL')}: <span data-testid="history-total-pnl" className={`font-mono font-semibold ${histTotal >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(histTotal)}</span></span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+        {tab === 'open' && positions.map((p) => {
+          const q = quotes[p.symbol]
+          const pnl = q?.price ? positionPnl(p, q, quotes) : 0
+          const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
+          const cur = q?.price ? (p.side === 'buy' ? bidOf(q) : askOf(q)) : null
+          return (
+            <div key={p.id} data-testid={`position-row-${p.id}`} className="flex items-center justify-between rounded-2xl bg-white/[0.03] px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <SymbolIcon symbol={p.symbol} type={meta.type} size={32} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">{p.symbol}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side} {p.lots}</span>
+                  </div>
+                  <div className="text-[11px] text-white/30 font-mono mt-0.5">{fmtPrice(p.entryPrice, meta.decimals)} → {cur ? fmtPrice(cur, meta.decimals) : '—'}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(pnl)}</span>
+                <button data-testid={`close-position-${p.id}`} disabled={closingId === p.id} onClick={() => closePosition(p.id)} title="Close position" className="h-8 w-8 flex items-center justify-center rounded-full bg-white/5 text-white/40 hover:bg-[#ff3b5c]/15 hover:text-[#ff3b5c] transition disabled:opacity-40">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )
+        })}
+        {tab === 'open' && positions.length === 0 && (
+          <div className="py-10 text-center text-white/25 text-xs">No open positions. Place your first trade →</div>
+        )}
+
+        {tab === 'history' && histList.map((p) => {
+          const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
+          return (
+            <div key={p.id} data-testid={`history-row-${p.id}`} className="flex items-center justify-between rounded-2xl bg-white/[0.02] px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <SymbolIcon symbol={p.symbol} type={meta.type} size={32} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold">{p.symbol}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side} {p.lots}</span>
+                  </div>
+                  <div className="text-[11px] text-white/30 mt-0.5">{p.closedAt ? new Date(p.closedAt).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                </div>
+              </div>
+              <span className={`font-mono text-sm font-semibold shrink-0 ${(p.pnl || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(p.pnl)}</span>
+            </div>
+          )
+        })}
+        {tab === 'history' && histList.length === 0 && (
+          <div className="py-10 text-center text-white/25 text-xs">{t('No trades in this period.')}</div>
+        )}
       </div>
     </div>
   )
@@ -683,8 +726,50 @@ const App = () => {
           </div>
 
           {/* mobile MARKETS view */}
-          <div data-testid="mobile-markets-view" className={`md:hidden flex-1 min-h-0 overflow-y-auto p-2 ${mobileTab === 'markets' ? 'block' : 'hidden'}`}>
-            {marketWatchList('mobile-markets')}
+          <div data-testid="mobile-markets-view" className={`md:hidden flex-1 min-h-0 flex-col ${mobileTab === 'markets' ? 'flex' : 'hidden'}`}>
+            <div className="p-3 shrink-0">
+              <select
+                data-testid="markets-category-select"
+                value={marketCat}
+                onChange={(e) => setMarketCat(e.target.value)}
+                className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:border-[#00FF66]/50"
+              >
+                <option value="all" className="bg-black">{t('Category')}: {t('All')}</option>
+                <option value="crypto" className="bg-black">{t('Crypto')}</option>
+                <option value="forex" className="bg-black">{t('Forex')}</option>
+                <option value="metal" className="bg-black">{t('Metals')}</option>
+                <option value="index" className="bg-black">{t('Indices')}</option>
+                <option value="stock" className="bg-black">{t('Stocks')}</option>
+              </select>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-3">
+              {symbols.filter((s) => marketCat === 'all' || s.type === marketCat).map((s) => {
+                const q = quotes[s.symbol]
+                const up = (q?.changePercent || 0) >= 0
+                return (
+                  <button
+                    key={s.symbol}
+                    data-testid={`mobile-markets-${s.symbol}`}
+                    onClick={() => setPickedAsset(s)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left hover:bg-white/5 transition"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <SymbolIcon symbol={s.symbol} type={s.type} size={28} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold">{s.symbol}</div>
+                        <div className="text-[11px] text-white/35 truncate">{s.name}</div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-mono">{q?.price ? fmtPrice(q.price, s.decimals) : '—'}</div>
+                      <div className={`text-[11px] font-mono ${up ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+                        {q?.changePercent != null ? `${up ? '+' : ''}${q.changePercent.toFixed(2)}%` : ''}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* positions (desktop / mobile chart tab) */}
@@ -699,8 +784,53 @@ const App = () => {
         </aside>
       </div>
 
+      {/* ASSET ACTION MODAL (markets tab) */}
+      {pickedAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setPickedAsset(null)} />
+          <div data-testid="terminal-asset-modal" className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0a0a] p-6 shadow-2xl">
+            <button data-testid="terminal-asset-modal-close" onClick={() => setPickedAsset(null)} className="absolute top-4 right-4 text-white/40 hover:text-white">
+              <X className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-3">
+              <SymbolIcon symbol={pickedAsset.symbol} type={pickedAsset.type} size={40} />
+              <div>
+                <div className="font-bold">{pickedAsset.symbol}</div>
+                <div className="text-xs text-white/40">{pickedAsset.name}</div>
+              </div>
+              <div className="ml-auto text-right">
+                <div className="font-mono text-sm">{quotes[pickedAsset.symbol]?.price ? fmtPrice(quotes[pickedAsset.symbol].price, pickedAsset.decimals) : '—'}</div>
+              </div>
+            </div>
+            <p className="text-xs text-white/35 mt-4">{t('What would you like to do?')}</p>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <button
+                data-testid="terminal-asset-chart-btn"
+                onClick={() => { setSelected(pickedAsset.symbol); setMobileTab('chart'); setPickedAsset(null) }}
+                className="flex flex-col items-center gap-2 rounded-xl border border-white/10 py-4 hover:border-[#00FF66]/40 hover:bg-white/[0.03] transition"
+              >
+                <CandlestickChart className="h-5 w-5 text-[#00FF66]" />
+                <span className="text-xs font-semibold">{t('Open chart')}</span>
+              </button>
+              <button
+                data-testid="terminal-asset-trade-btn"
+                onClick={() => { setSelected(pickedAsset.symbol); setMobileTab('trade'); setPickedAsset(null) }}
+                className="flex flex-col items-center gap-2 rounded-xl bg-[#00FF66] text-black py-4 hover:bg-[#00e65c] transition"
+              >
+                <ArrowLeftRight className="h-5 w-5" />
+                <span className="text-xs font-bold">{t('Trade')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MOBILE BOTTOM NAV */}
       <nav data-testid="mobile-bottom-nav" className="md:hidden h-16 shrink-0 border-t border-white/10 bg-black flex items-stretch z-30">
+        <button data-testid="bottomnav-home" onClick={() => router.push('/home')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+          <HomeIcon className="h-5 w-5" />
+          <span className="text-[10px] font-medium">{t('Home')}</span>
+        </button>
         <button data-testid="bottomnav-chart" onClick={() => setMobileTab('chart')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'chart' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
           <CandlestickChart className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Chart')}</span>
@@ -712,14 +842,6 @@ const App = () => {
         <button data-testid="bottomnav-positions" onClick={() => setMobileTab('positions')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'positions' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
           <ListOrdered className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Positions')}</span>
-        </button>
-        <button data-testid="bottomnav-markets" onClick={() => setMobileTab('markets')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'markets' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
-          <LineChart className="h-5 w-5" />
-          <span className="text-[10px] font-medium">{t('Markets')}</span>
-        </button>
-        <button data-testid="bottomnav-wallet" onClick={() => router.push('/dashboard')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
-          <Wallet className="h-5 w-5" />
-          <span className="text-[10px] font-medium">{t('Wallet')}</span>
         </button>
       </nav>
 

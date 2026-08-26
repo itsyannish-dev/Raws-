@@ -4,12 +4,14 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, fmtMoney, fmtPrice, logout } from '@/lib/rm'
 import { Toaster, toast } from 'sonner'
-import { ShieldCheck, LogOut, Users, ArrowUpFromLine, LineChart, Settings, LayoutDashboard, Search, Check, X, CandlestickChart } from 'lucide-react'
+import { ShieldCheck, LogOut, Users, ArrowUpFromLine, ArrowDownToLine, LineChart, Settings, LayoutDashboard, Search, Check, X, CandlestickChart, FileCheck, Eye } from 'lucide-react'
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'users', label: 'Users', icon: Users },
+  { key: 'deposits', label: 'Deposits', icon: ArrowDownToLine },
   { key: 'withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine },
+  { key: 'verification', label: 'Verification', icon: FileCheck },
   { key: 'positions', label: 'Positions', icon: LineChart },
   { key: 'settings', label: 'Settings', icon: Settings },
 ]
@@ -26,6 +28,9 @@ const App = () => {
   const [adjustNote, setAdjustNote] = useState('')
   const [transactions, setTransactions] = useState([])
   const [txFilter, setTxFilter] = useState('pending')
+  const [documents, setDocuments] = useState([])
+  const [docFilter, setDocFilter] = useState('pending')
+  const [previewDoc, setPreviewDoc] = useState(null)
   const [positions, setPositions] = useState([])
   const [settings, setSettings] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -57,11 +62,17 @@ const App = () => {
   const loadUsers = useCallback(async (q = '') => {
     try { const r = await api.get(`/admin/users${q ? `?search=${encodeURIComponent(q)}` : ''}`); setUsers(r.data.users) } catch (e) {}
   }, [])
-  const loadTransactions = useCallback(async (filter) => {
+  const loadTransactions = useCallback(async (type, filter) => {
     try {
-      const qs = filter === 'pending' ? '?type=withdrawal&status=pending' : '?type=withdrawal'
+      const qs = filter === 'pending' ? `?type=${type}&status=pending` : `?type=${type}`
       const r = await api.get(`/admin/transactions${qs}`)
       setTransactions(r.data.transactions)
+    } catch (e) {}
+  }, [])
+  const loadDocuments = useCallback(async (filter) => {
+    try {
+      const r = await api.get(`/admin/documents${filter === 'pending' ? '?status=pending' : ''}`)
+      setDocuments(r.data.documents)
     } catch (e) {}
   }, [])
   const loadPositions = useCallback(async () => {
@@ -75,11 +86,13 @@ const App = () => {
     if (!me) return
     if (tab === 'overview') loadStats()
     if (tab === 'users') loadUsers(search)
-    if (tab === 'withdrawals') loadTransactions(txFilter)
+    if (tab === 'deposits') loadTransactions('deposit', txFilter)
+    if (tab === 'withdrawals') loadTransactions('withdrawal', txFilter)
+    if (tab === 'verification') loadDocuments(docFilter)
     if (tab === 'positions') loadPositions()
     if (tab === 'settings') loadSettings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me, tab, txFilter])
+  }, [me, tab, txFilter, docFilter])
 
   // ---------- actions ----------
   const adjustBalance = async (e) => {
@@ -101,12 +114,12 @@ const App = () => {
     }
   }
 
-  const processTx = async (id, action) => {
+  const processTx = async (id, action, type) => {
     setBusy(true)
     try {
       await api.post(`/admin/transactions/${id}/${action}`)
-      toast.success(`Withdrawal ${action === 'approve' ? 'approved' : 'rejected (funds refunded)'}`)
-      loadTransactions(txFilter)
+      toast.success(`${type === 'deposit' ? 'Deposit' : 'Withdrawal'} ${action === 'approve' ? 'approved' : 'rejected'}`)
+      loadTransactions(type, txFilter)
       loadStats()
     } catch (e2) {
       toast.error(e2.response?.data?.error || 'Action failed')
@@ -115,11 +128,34 @@ const App = () => {
     }
   }
 
+  const processDoc = async (id, action) => {
+    setBusy(true)
+    try {
+      await api.post(`/admin/documents/${id}/${action}`)
+      toast.success(`Document ${action === 'approve' ? 'approved' : 'rejected'}`)
+      setPreviewDoc(null)
+      loadDocuments(docFilter)
+    } catch (e2) {
+      toast.error(e2.response?.data?.error || 'Action failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openPreview = async (doc) => {
+    try {
+      const r = await api.get(`/admin/documents/${doc.id}/file`)
+      setPreviewDoc(r.data.document)
+    } catch (e) {
+      toast.error('Could not load file')
+    }
+  }
+
   const saveSettings = async (e) => {
     e.preventDefault()
     setBusy(true)
     try {
-      const r = await api.put('/admin/settings', settings)
+      const r = await api.put('/admin/settings', { spreadPips: settings.spreadPips, tradingEnabled: settings.tradingEnabled })
       setSettings(r.data.settings)
       toast.success('Platform settings saved')
     } catch (e2) {
@@ -131,14 +167,78 @@ const App = () => {
 
   const statusBadge = (s) => ({
     completed: 'bg-[#00FF66]/15 text-[#00FF66]',
-    pending: 'bg-yellow-400/15 text-yellow-400',
     approved: 'bg-[#00FF66]/15 text-[#00FF66]',
+    verified: 'bg-[#00FF66]/15 text-[#00FF66]',
+    pending: 'bg-yellow-400/15 text-yellow-400',
+    waiting_payment: 'bg-blue-400/15 text-blue-400',
     rejected: 'bg-[#ff3b5c]/15 text-[#ff3b5c]',
+    failed: 'bg-[#ff3b5c]/15 text-[#ff3b5c]',
+    unverified: 'bg-white/10 text-white/50',
   }[s] || 'bg-white/10 text-white/50')
 
   if (!me) {
     return <div className="min-h-screen bg-black text-white/30 flex items-center justify-center text-sm">Verifying admin access…</div>
   }
+
+  const txTable = (type) => (
+    <div className="rounded-2xl border border-white/5 overflow-x-auto">
+      <table className="w-full text-sm min-w-[760px]">
+        <thead>
+          <tr className="text-left text-white/30 text-xs bg-white/[0.02]">
+            <th className="px-5 py-3 font-medium">User</th>
+            <th className="px-5 py-3 font-medium text-right">Amount</th>
+            <th className="px-5 py-3 font-medium">{type === 'deposit' ? 'Crypto' : 'Wallet address'}</th>
+            <th className="px-5 py-3 font-medium">Status</th>
+            <th className="px-5 py-3 font-medium text-right">Created</th>
+            <th className="px-5 py-3 font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody data-testid={`admin-${type}s-table`}>
+          {transactions.map((tx) => (
+            <tr key={tx.id} className="border-t border-white/5">
+              <td className="px-5 py-3">
+                <div className="font-medium">{tx.user?.name || '—'}</div>
+                <div className="text-xs text-white/35">{tx.user?.email}</div>
+              </td>
+              <td className="px-5 py-3 text-right font-mono">{fmtMoney(tx.amount)}</td>
+              <td className="px-5 py-3">
+                {type === 'deposit' ? (
+                  <div className="text-xs">
+                    <span className="font-mono">{tx.payAmount ? `${tx.payAmount} ` : ''}{(tx.payCurrency || '').toUpperCase()}</span>
+                    {tx.payAddress && <div className="text-white/30 font-mono text-[10px] mt-0.5">{tx.payAddress.slice(0, 18)}…</div>}
+                  </div>
+                ) : (
+                  <div className="text-xs font-mono">
+                    {tx.walletAddress ? `${tx.walletAddress.slice(0, 18)}…` : '—'}
+                    {tx.network && <span className="ml-1.5 text-white/40">({tx.network})</span>}
+                  </div>
+                )}
+              </td>
+              <td className="px-5 py-3">
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${statusBadge(tx.status)}`}>{tx.status.replace('_', ' ')}</span>
+              </td>
+              <td className="px-5 py-3 text-right text-white/40 text-xs">{new Date(tx.createdAt).toLocaleString()}</td>
+              <td className="px-5 py-3 text-right">
+                {['pending', 'waiting_payment'].includes(tx.status) ? (
+                  <div className="flex justify-end gap-2">
+                    <button data-testid={`approve-${tx.id}`} disabled={busy} onClick={() => processTx(tx.id, 'approve', type)} className="inline-flex items-center gap-1 text-xs font-semibold bg-[#00FF66] text-black px-3 py-1.5 rounded-md hover:bg-[#00e65c] transition disabled:opacity-40">
+                      <Check className="h-3 w-3" /> Approve
+                    </button>
+                    <button data-testid={`reject-${tx.id}`} disabled={busy} onClick={() => processTx(tx.id, 'reject', type)} className="inline-flex items-center gap-1 text-xs font-semibold border border-[#ff3b5c]/40 text-[#ff3b5c] px-3 py-1.5 rounded-md hover:bg-[#ff3b5c]/10 transition disabled:opacity-40">
+                      <X className="h-3 w-3" /> Reject
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-white/25">{tx.processedAt ? new Date(tx.processedAt).toLocaleString() : ''}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+          {transactions.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-white/25">No {txFilter === 'pending' ? 'pending ' : ''}{type}s.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -167,14 +267,14 @@ const App = () => {
 
       {/* TABS */}
       <div className="border-b border-white/5 px-4 flex gap-1 overflow-x-auto">
-        {TABS.map((t) => (
+        {TABS.map((tb) => (
           <button
-            key={t.key}
-            data-testid={`admin-tab-${t.key}`}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${tab === t.key ? 'border-[#00FF66] text-white' : 'border-transparent text-white/40 hover:text-white'}`}
+            key={tb.key}
+            data-testid={`admin-tab-${tb.key}`}
+            onClick={() => { setTab(tb.key); setTxFilter('pending') }}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition whitespace-nowrap ${tab === tb.key ? 'border-[#00FF66] text-white' : 'border-transparent text-white/40 hover:text-white'}`}
           >
-            <t.icon className="h-4 w-4" /> {t.label}
+            <tb.icon className="h-4 w-4" /> {tb.label}
           </button>
         ))}
       </div>
@@ -190,7 +290,9 @@ const App = () => {
                 { label: 'Total balances', value: stats ? fmtMoney(stats.totalBalance) : '—', testid: 'stat-balance' },
                 { label: 'Open positions', value: stats ? stats.openPositions : '—', testid: 'stat-positions' },
                 { label: 'Pending withdrawals', value: stats ? stats.pendingWithdrawals : '—', accent: stats?.pendingWithdrawals > 0, testid: 'stat-pending' },
-                { label: 'Pending amount', value: stats ? fmtMoney(stats.pendingWithdrawalAmount) : '—' },
+                { label: 'Pending deposits', value: stats ? stats.pendingDeposits : '—', accent: stats?.pendingDeposits > 0, testid: 'stat-pending-deposits' },
+                { label: 'Awaiting payment', value: stats ? stats.awaitingPaymentDeposits : '—' },
+                { label: 'Pending documents', value: stats ? stats.pendingDocuments : '—', accent: stats?.pendingDocuments > 0, testid: 'stat-pending-docs' },
                 { label: 'Total deposited', value: stats ? fmtMoney(stats.totalDeposited) : '—' },
                 { label: 'Total withdrawn', value: stats ? fmtMoney(stats.totalWithdrawn) : '—' },
               ].map((c) => (
@@ -200,11 +302,17 @@ const App = () => {
                 </div>
               ))}
             </div>
-            {stats?.pendingWithdrawals > 0 && (
-              <button onClick={() => setTab('withdrawals')} className="mt-6 text-sm text-yellow-400 hover:underline">
-                → {stats.pendingWithdrawals} withdrawal{stats.pendingWithdrawals > 1 ? 's' : ''} awaiting review
-              </button>
-            )}
+            <div className="flex flex-wrap gap-4 mt-6">
+              {stats?.pendingDeposits > 0 && (
+                <button onClick={() => setTab('deposits')} className="text-sm text-yellow-400 hover:underline">→ {stats.pendingDeposits} deposit(s) awaiting approval</button>
+              )}
+              {stats?.pendingWithdrawals > 0 && (
+                <button onClick={() => setTab('withdrawals')} className="text-sm text-yellow-400 hover:underline">→ {stats.pendingWithdrawals} withdrawal(s) awaiting review</button>
+              )}
+              {stats?.pendingDocuments > 0 && (
+                <button onClick={() => setTab('verification')} className="text-sm text-yellow-400 hover:underline">→ {stats.pendingDocuments} document(s) awaiting verification</button>
+              )}
+            </div>
           </div>
         )}
 
@@ -225,11 +333,12 @@ const App = () => {
               </div>
             </div>
             <div className="rounded-2xl border border-white/5 overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[720px]">
                 <thead>
                   <tr className="text-left text-white/30 text-xs bg-white/[0.02]">
                     <th className="px-5 py-3 font-medium">User</th>
                     <th className="px-5 py-3 font-medium">Role</th>
+                    <th className="px-5 py-3 font-medium">KYC</th>
                     <th className="px-5 py-3 font-medium text-right">Balance</th>
                     <th className="px-5 py-3 font-medium text-right">Joined</th>
                     <th className="px-5 py-3 font-medium text-right"></th>
@@ -245,6 +354,9 @@ const App = () => {
                       <td className="px-5 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${u.role === 'admin' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-white/10 text-white/50'}`}>{u.role}</span>
                       </td>
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${statusBadge(u.verificationStatus || 'unverified')}`}>{u.verificationStatus || 'unverified'}</span>
+                      </td>
                       <td className="px-5 py-3 text-right font-mono">{fmtMoney(u.balance || 0)}</td>
                       <td className="px-5 py-3 text-right text-white/40 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
                       <td className="px-5 py-3 text-right">
@@ -254,10 +366,28 @@ const App = () => {
                       </td>
                     </tr>
                   ))}
-                  {users.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-white/25">No users found.</td></tr>}
+                  {users.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-white/25">No users found.</td></tr>}
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ===== DEPOSITS ===== */}
+        {tab === 'deposits' && (
+          <div>
+            <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+              <h1 className="text-xl font-bold">Deposit approvals</h1>
+              <div className="flex gap-1">
+                {[{ k: 'pending', l: 'Pending' }, { k: 'all', l: 'All' }].map((f) => (
+                  <button key={f.k} data-testid={`dep-filter-${f.k}`} onClick={() => setTxFilter(f.k)} className={`px-4 py-1.5 text-xs rounded-full font-medium transition ${txFilter === f.k ? 'bg-[#00FF66] text-black' : 'text-white/40 hover:text-white bg-white/5'}`}>
+                    {f.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-white/35 mb-4">Deposits become <span className="text-yellow-400">pending</span> once the crypto payment is confirmed on-chain. Approving credits the user's balance. <span className="text-blue-400">Awaiting payment</span> means the user has not paid yet — approving manually credits the balance anyway.</p>
+            {txTable('deposit')}
           </div>
         )}
 
@@ -274,46 +404,71 @@ const App = () => {
                 ))}
               </div>
             </div>
+            {txTable('withdrawal')}
+          </div>
+        )}
+
+        {/* ===== VERIFICATION ===== */}
+        {tab === 'verification' && (
+          <div>
+            <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
+              <h1 className="text-xl font-bold">Account verification</h1>
+              <div className="flex gap-1">
+                {[{ k: 'pending', l: 'Pending' }, { k: 'all', l: 'All' }].map((f) => (
+                  <button key={f.k} data-testid={`doc-filter-${f.k}`} onClick={() => setDocFilter(f.k)} className={`px-4 py-1.5 text-xs rounded-full font-medium transition ${docFilter === f.k ? 'bg-[#00FF66] text-black' : 'text-white/40 hover:text-white bg-white/5'}`}>
+                    {f.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-white/35 mb-4">Users are marked <span className="text-[#00FF66]">verified</span> once both an identity document and a proof of address are approved.</p>
             <div className="rounded-2xl border border-white/5 overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[760px]">
                 <thead>
                   <tr className="text-left text-white/30 text-xs bg-white/[0.02]">
                     <th className="px-5 py-3 font-medium">User</th>
-                    <th className="px-5 py-3 font-medium text-right">Amount</th>
+                    <th className="px-5 py-3 font-medium">Type</th>
+                    <th className="px-5 py-3 font-medium">File</th>
                     <th className="px-5 py-3 font-medium">Status</th>
-                    <th className="px-5 py-3 font-medium text-right">Requested</th>
+                    <th className="px-5 py-3 font-medium text-right">Submitted</th>
                     <th className="px-5 py-3 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody data-testid="admin-withdrawals-table">
-                  {transactions.map((t) => (
-                    <tr key={t.id} className="border-t border-white/5">
+                <tbody data-testid="admin-documents-table">
+                  {documents.map((doc) => (
+                    <tr key={doc.id} className="border-t border-white/5">
                       <td className="px-5 py-3">
-                        <div className="font-medium">{t.user?.name || '—'}</div>
-                        <div className="text-xs text-white/35">{t.user?.email}</div>
+                        <div className="font-medium">{doc.user?.name || '—'}</div>
+                        <div className="text-xs text-white/35">{doc.user?.email}</div>
                       </td>
-                      <td className="px-5 py-3 text-right font-mono">{fmtMoney(t.amount)}</td>
                       <td className="px-5 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${statusBadge(t.status)}`}>{t.status}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize bg-white/10 text-white/60">{doc.type === 'identity' ? 'Identity' : 'Address'}</span>
                       </td>
-                      <td className="px-5 py-3 text-right text-white/40 text-xs">{new Date(t.createdAt).toLocaleString()}</td>
+                      <td className="px-5 py-3 text-xs text-white/50 max-w-[180px] truncate">{doc.fileName}</td>
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${statusBadge(doc.status)}`}>{doc.status}</span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-white/40 text-xs">{new Date(doc.createdAt).toLocaleString()}</td>
                       <td className="px-5 py-3 text-right">
-                        {t.status === 'pending' ? (
-                          <div className="flex justify-end gap-2">
-                            <button data-testid={`approve-${t.id}`} disabled={busy} onClick={() => processTx(t.id, 'approve')} className="inline-flex items-center gap-1 text-xs font-semibold bg-[#00FF66] text-black px-3 py-1.5 rounded-md hover:bg-[#00e65c] transition disabled:opacity-40">
-                              <Check className="h-3 w-3" /> Approve
-                            </button>
-                            <button data-testid={`reject-${t.id}`} disabled={busy} onClick={() => processTx(t.id, 'reject')} className="inline-flex items-center gap-1 text-xs font-semibold border border-[#ff3b5c]/40 text-[#ff3b5c] px-3 py-1.5 rounded-md hover:bg-[#ff3b5c]/10 transition disabled:opacity-40">
-                              <X className="h-3 w-3" /> Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-white/25">{t.processedAt ? new Date(t.processedAt).toLocaleString() : ''}</span>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          <button data-testid={`view-doc-${doc.id}`} disabled={busy} onClick={() => openPreview(doc)} className="inline-flex items-center gap-1 text-xs font-semibold border border-white/15 px-3 py-1.5 rounded-md hover:border-white/40 transition disabled:opacity-40">
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                          {doc.status === 'pending' && (
+                            <>
+                              <button data-testid={`approve-doc-${doc.id}`} disabled={busy} onClick={() => processDoc(doc.id, 'approve')} className="inline-flex items-center gap-1 text-xs font-semibold bg-[#00FF66] text-black px-3 py-1.5 rounded-md hover:bg-[#00e65c] transition disabled:opacity-40">
+                                <Check className="h-3 w-3" /> Approve
+                              </button>
+                              <button data-testid={`reject-doc-${doc.id}`} disabled={busy} onClick={() => processDoc(doc.id, 'reject')} className="inline-flex items-center gap-1 text-xs font-semibold border border-[#ff3b5c]/40 text-[#ff3b5c] px-3 py-1.5 rounded-md hover:bg-[#ff3b5c]/10 transition disabled:opacity-40">
+                                <X className="h-3 w-3" /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
-                  {transactions.length === 0 && <tr><td colSpan={5} className="px-5 py-10 text-center text-white/25">No {txFilter === 'pending' ? 'pending ' : ''}withdrawal requests.</td></tr>}
+                  {documents.length === 0 && <tr><td colSpan={6} className="px-5 py-10 text-center text-white/25">No {docFilter === 'pending' ? 'pending ' : ''}documents.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -341,9 +496,7 @@ const App = () => {
                 <tbody data-testid="admin-positions-table">
                   {positions.map((p) => (
                     <tr key={p.id} className="border-t border-white/5">
-                      <td className="px-5 py-3">
-                        <div className="text-xs">{p.user?.email || p.userId}</div>
-                      </td>
+                      <td className="px-5 py-3"><div className="text-xs">{p.user?.email || p.userId}</div></td>
                       <td className="px-5 py-3 font-semibold">{p.symbol}</td>
                       <td className="px-5 py-3">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side}</span>
@@ -369,25 +522,26 @@ const App = () => {
             {settings ? (
               <form onSubmit={saveSettings} className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 space-y-5">
                 <div>
-                  <label className="text-[11px] text-white/40 block mb-1.5">Spread (%) — applied to bid/ask on every trade</label>
+                  <label className="text-[11px] text-white/40 block mb-1.5">Base spread (pips) — actual spread varies between 1x and 2x this value</label>
                   <input
                     data-testid="settings-spread-input"
                     type="number"
-                    step="0.01"
-                    min="0"
-                    max="2"
-                    value={(settings.spread * 100).toFixed(2)}
-                    onChange={(e) => setSettings({ ...settings, spread: Number(e.target.value) / 100 })}
+                    step="0.1"
+                    min="0.1"
+                    max="10"
+                    value={settings.spreadPips}
+                    onChange={(e) => setSettings({ ...settings, spreadPips: Number(e.target.value) })}
                     className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-sm font-mono focus:outline-none focus:border-[#00FF66]/50"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-white/40 block mb-1.5">Maximum leverage</label>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {[1, 2, 5, 10, 20, 50, 100].map((l) => (
-                      <button type="button" key={l} data-testid={`settings-maxlev-${l}`} onClick={() => setSettings({ ...settings, maxLeverage: l })} className={`text-xs py-2 rounded-md border font-mono transition ${settings.maxLeverage === l ? 'border-[#00FF66]/60 bg-[#00FF66]/10 text-[#00FF66]' : 'border-white/10 text-white/40 hover:text-white'}`}>
-                        {l}x
-                      </button>
+                  <label className="text-[11px] text-white/40 block mb-1.5">Maximum leverage per category (fixed rules)</label>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {Object.entries(settings.categoryLeverage || { forex: 100, index: 50, metal: 20, crypto: 10, stock: 10 }).map(([cat, lev]) => (
+                      <div key={cat} className="rounded-md border border-white/10 py-2 text-center">
+                        <div className="text-[9px] uppercase tracking-wider text-white/35">{cat}</div>
+                        <div className="text-xs font-mono text-[#00FF66]">1:{lev}</div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -415,6 +569,37 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {/* DOCUMENT PREVIEW MODAL */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setPreviewDoc(null)} />
+          <div data-testid="doc-preview-modal" className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0a0a0a] p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setPreviewDoc(null)} className="absolute top-4 right-4 text-white/40 hover:text-white" data-testid="doc-preview-close">
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="font-bold text-sm">{previewDoc.type === 'identity' ? 'Identity document' : 'Proof of address'}</h2>
+            <p className="text-xs text-white/35 mt-0.5">{previewDoc.fileName}</p>
+            <div className="mt-4 rounded-xl overflow-hidden border border-white/10 bg-black">
+              {previewDoc.mimeType === 'application/pdf' ? (
+                <iframe title="document" src={`data:application/pdf;base64,${previewDoc.data}`} className="w-full h-[60vh]" />
+              ) : (
+                <img src={`data:${previewDoc.mimeType};base64,${previewDoc.data}`} alt="document" className="w-full object-contain max-h-[60vh]" />
+              )}
+            </div>
+            {previewDoc.status === 'pending' && (
+              <div className="flex gap-3 mt-5">
+                <button data-testid="preview-approve-btn" disabled={busy} onClick={() => processDoc(previewDoc.id, 'approve')} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-semibold bg-[#00FF66] text-black py-3 rounded-xl hover:bg-[#00e65c] transition disabled:opacity-40">
+                  <Check className="h-4 w-4" /> Approve
+                </button>
+                <button data-testid="preview-reject-btn" disabled={busy} onClick={() => processDoc(previewDoc.id, 'reject')} className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-semibold border border-[#ff3b5c]/40 text-[#ff3b5c] py-3 rounded-xl hover:bg-[#ff3b5c]/10 transition disabled:opacity-40">
+                  <X className="h-4 w-4" /> Reject
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* MANAGE USER MODAL */}
       {selectedUser && (
