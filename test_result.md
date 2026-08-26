@@ -109,6 +109,20 @@ user_problem_statement: |
   Phase 1 (current): auth, live market data, trading terminal (charts, buy/sell, leverage), real-time PnL engine, wallet.
 
 backend:
+  - task: "SL/TP on positions: order stops, modify endpoint, server-side auto-close triggers"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "NEW (Phase 2). (1) POST /api/orders now accepts optional stopLoss & takeProfit, validated via validateStops (BUY: SL<entry, TP>entry; SELL: SL>entry, TP<entry) — invalid combos return 400. Position stored with stopLoss/takeProfit/closeReason fields. (2) NEW POST /api/positions/{id}/modify updates SL/TP with same validation; returns updated position. (3) checkAndTriggerStops runs on GET /api/positions?status=open and GET /api/account/summary: closes any open position whose current close-price crossed SL or TP, credits/debits balance, sets closeReason='sl'|'tp'. Test: create buy position with SL below & TP above current; modify SL/TP; verify invalid SL/TP rejected; verify a position with TP just above current close price auto-closes on next positions poll and balance updates. Use trader@rawmarkets.com / Trader123! (see test_credentials.md)."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Complete SL/TP functionality verified. All 8 tests passed. (1) ORDER CREATION WITH SL/TP: POST /api/orders with valid stopLoss (below entry for BUY) and takeProfit (above entry for BUY) successfully creates position with SL=$70,601.47 and TP=$86,290.69 (BTCUSD at $78,446). Position returned with stopLoss and takeProfit fields matching sent values. (2) VALIDATION - ALL CASES WORKING: BUY with SL above entry correctly rejected (400 'Stop Loss must be below the entry price'). BUY with TP below entry correctly rejected (400 'Take Profit must be above the entry price'). SELL with SL below entry correctly rejected (400 'Stop Loss must be above the entry price'). SELL with TP above entry correctly rejected (400 'Take Profit must be below the entry price'). stopLoss=0 correctly rejected (400 'Invalid Stop Loss price'). (3) MODIFY ENDPOINT: POST /api/positions/{id}/modify successfully updates SL/TP to new valid levels (SL=$72,170.39, TP=$84,721.77). Invalid modify (SL above entry for BUY) correctly rejected with 400. (4) SERVER-SIDE AUTO-TRIGGER (CRITICAL): Created BUY position with TP=$78,461.77 (just 0.02% above current price $78,446). Called GET /api/positions?status=open to trigger checkAndTriggerStops. Position NO LONGER in open list (auto-closed). GET /api/positions?status=closed confirms position present with status='closed', closeReason='tp', closePrice=$78,461.77, pnl=$0.147. Balance updated correctly from $20,049.98 to $20,050.13 (change=$0.147 matches PnL). All SL/TP functionality working correctly. Test script: /app/backend_test_sltp.py"
   - task: "Auth: register/login/me (JWT, bcrypt)"
     implemented: true
     working: true
@@ -304,7 +318,7 @@ frontend:
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 6
+  test_sequence: 7
   run_ui: false
 
 test_plan:
@@ -314,6 +328,10 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "main"
+    message: "PHASE 2 (SL/TP backend) ready for testing. Please test ONLY the new SL/TP task: (1) POST /api/orders with valid stopLoss/takeProfit for a BUY (SL below current, TP above) — should create position with those fields. (2) Invalid combos must return 400: BUY with SL above entry, BUY with TP below entry, SELL with SL below entry, SELL with TP above entry. (3) POST /api/positions/{id}/modify to set/update SL & TP — valid succeeds, invalid returns 400. (4) Auto-trigger: create a BUY with takeProfit set just ABOVE the current close price (so it should trigger), then GET /api/positions?status=open — the position should be gone (auto-closed) and appear in GET /api/positions?status=closed with closeReason='tp', and balance should reflect the realized PnL. Do NOT re-test previously working tasks. Creds: trader@rawmarkets.com / Trader123!."
+  - agent: "testing"
+    message: "SL/TP BACKEND TESTING COMPLETE - ALL TESTS PASSED ✅. Comprehensive test of new SL/TP functionality (8/8 tests passed): (1) ORDER CREATION: POST /api/orders with valid stopLoss/takeProfit creates position correctly (BTCUSD BUY at $78,446 with SL=$70,601 below and TP=$86,290 above). Position returned with stopLoss and takeProfit fields matching sent values. (2) VALIDATION (5 test cases): BUY with SL above entry → 400 'Stop Loss must be below the entry price' ✓. BUY with TP below entry → 400 'Take Profit must be above the entry price' ✓. SELL with SL below entry → 400 'Stop Loss must be above the entry price' ✓. SELL with TP above entry → 400 'Take Profit must be below the entry price' ✓. stopLoss=0 → 400 'Invalid Stop Loss price' ✓. (3) MODIFY ENDPOINT: POST /api/positions/{id}/modify successfully updates SL/TP to new valid levels (SL=$72,170, TP=$84,721). Invalid modify (SL above entry for BUY) correctly rejected with 400 ✓. (4) SERVER-SIDE AUTO-TRIGGER (CRITICAL): Created BUY position with TP=$78,461.77 (0.02% above current $78,446). Called GET /api/positions?status=open to trigger checkAndTriggerStops. Position NO LONGER in open list (auto-closed) ✓. GET /api/positions?status=closed confirms position with status='closed', closeReason='tp', closePrice=$78,461.77, pnl=$0.147 ✓. Balance updated correctly from $20,049.98 to $20,050.13 (change=$0.147 matches PnL) ✓. All SL/TP functionality working perfectly. Test script: /app/backend_test_sltp.py"
   - agent: "main"
     message: "BATCH 4 changes (frontend only, no backend changes): (1) Landing: removed 'Your account, always with you' and leverage sections; new /leverage page (nav link 'Leverage') with image + progress bars; new /about and /contact pages (Contact: WhatsApp wa.me/410778059868 + Instagram rawmarkets.global); header redesigned WITHOUT square logo (text-only RAWMARKETS), nav links: Markets, Leverage, How it works, Pricing, FAQ, About us, Contact us; 'How it works' redesigned with dynamic connected steps 1-2-3 (green icon tiles, arrows, hover effects); footer updated with WhatsApp/Instagram buttons; /?join=1 auto-opens register modal (used by subpage CTAs). Shared SiteHeader/SiteFooter in /app/components/site-header.js. (2) Terminal chart: bid/ask price lines now have NO labels (axisLabelVisible false, no title) - lines only. (3) Bottom nav: Wallet tab REMOVED everywhere - now Home, Chart, Trade, Positions (wallet reachable via hamburger drawer). (4) Positions panel redesign: cleaner rows with SymbolIcon, side+lots pill, entry→current, PnL, round X close button; history rows same style with date."
   - agent: "main"

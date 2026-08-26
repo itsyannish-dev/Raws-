@@ -123,3 +123,8 @@ code, .font-mono, .tabular {
     0% { color: #ff3b5c; }
     100% { color: inherit; }
 }
+
+@keyframes slideUp {
+    0% { transform: translateY(24px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}

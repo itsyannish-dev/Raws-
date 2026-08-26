@@ -378,6 +378,64 @@ async function computeAccount(database, user) {
   }
 }
 
+// ---------- SL / TP ----------
+function validateStops(side, refPrice, sl, tp) {
+  const parse = (v) => (v == null || v === '' ? null : Number(v))
+  const slN = parse(sl)
+  const tpN = parse(tp)
+  if (slN != null && (!isFinite(slN) || slN <= 0)) return { error: 'Invalid Stop Loss price' }
+  if (tpN != null && (!isFinite(tpN) || tpN <= 0)) return { error: 'Invalid Take Profit price' }
+  if (side === 'buy') {
+    if (slN != null && slN >= refPrice) return { error: 'For a BUY, Stop Loss must be below the entry price' }
+    if (tpN != null && tpN <= refPrice) return { error: 'For a BUY, Take Profit must be above the entry price' }
+  } else {
+    if (slN != null && slN <= refPrice) return { error: 'For a SELL, Stop Loss must be above the entry price' }
+    if (tpN != null && tpN >= refPrice) return { error: 'For a SELL, Take Profit must be below the entry price' }
+  }
+  return { sl: slN, tp: tpN }
+}
+
+// Server-side SL/TP trigger evaluation — runs on every account/positions poll (near real-time)
+async function checkAndTriggerStops(database, user) {
+  const open = await database.collection('positions').find({ userId: user.id, status: 'open' }).toArray()
+  const targets = open.filter((p) => p.stopLoss != null || p.takeProfit != null)
+  if (!targets.length) return false
+  const symbols = [...new Set(targets.map((p) => p.symbol))]
+  let quotes = {}
+  try { quotes = await fetchQuotes(symbols) } catch (e) { return false }
+  let any = false
+  for (const p of targets) {
+    const q = quotes[p.symbol]
+    const meta = symMeta(p.symbol)
+    if (!q || !meta || !q.price) continue
+    const half = halfSpreadOf(q, meta)
+    const closePrice = p.side === 'buy' ? q.price - half : q.price + half
+    let hit = null
+    if (p.side === 'buy') {
+      if (p.stopLoss != null && closePrice <= p.stopLoss) hit = 'sl'
+      else if (p.takeProfit != null && closePrice >= p.takeProfit) hit = 'tp'
+    } else {
+      if (p.stopLoss != null && closePrice >= p.stopLoss) hit = 'sl'
+      else if (p.takeProfit != null && closePrice <= p.takeProfit) hit = 'tp'
+    }
+    if (!hit) continue
+    const execPrice = hit === 'sl' ? p.stopLoss : p.takeProfit
+    const dir = p.side === 'buy' ? 1 : -1
+    let pnl
+    try { pnl = await pnlUsd(meta, p.entryPrice, execPrice, p.lots, dir) } catch (e) { continue }
+    const closedAt = new Date().toISOString()
+    const res = await database.collection('positions').updateOne(
+      { id: p.id, status: 'open' },
+      { $set: { status: 'closed', closePrice: execPrice, pnl, closedAt, closeReason: hit } }
+    )
+    if (res.modifiedCount > 0) {
+      await database.collection('users').updateOne({ id: user.id }, { $inc: { balance: pnl } })
+      any = true
+    }
+  }
+  return any
+}
+
 // ---------- KYC VERIFICATION ----------
 // verified when user has an approved 'identity' AND an approved 'address' document
 async function recomputeVerification(database, userId) {
@@ -580,7 +638,9 @@ async function handleRoute(request, { params }) {
       const user = await getAuthUser(request, database)
       if (!user) return err('Unauthorized', 401)
       await getSettings(database)
-      const account = await computeAccount(database, user)
+      await checkAndTriggerStops(database, user)
+      const freshUser = await database.collection('users').findOne({ id: user.id })
+      const account = await computeAccount(database, freshUser || user)
       return json({ account })
     }
 
@@ -624,6 +684,9 @@ async function handleRoute(request, { params }) {
         return err(`Insufficient free margin. Required: $${margin.toFixed(2)}, available: $${Math.max(0, account.freeMargin).toFixed(2)}`)
       }
 
+      const stops = validateStops(side, entryPrice, body.stopLoss, body.takeProfit)
+      if (stops.error) return err(stops.error)
+
       const position = {
         id: uuidv4(),
         userId: user.id,
@@ -638,10 +701,13 @@ async function handleRoute(request, { params }) {
         quoteCurrency: meta.quote || 'USD',
         pipSize: meta.pipSize,
         spreadPips: quote.spreadPips,
+        stopLoss: stops.sl,
+        takeProfit: stops.tp,
         status: 'open',
         openedAt: new Date().toISOString(),
         closedAt: null,
         closePrice: null,
+        closeReason: null,
         pnl: null,
       }
       await database.collection('positions').insertOne(position)
@@ -654,6 +720,7 @@ async function handleRoute(request, { params }) {
       if (!user) return err('Unauthorized', 401)
       const url = new URL(request.url)
       const status = url.searchParams.get('status') || 'open'
+      if (status === 'open') await checkAndTriggerStops(database, user)
       const list = await database
         .collection('positions')
         .find({ userId: user.id, status }, { projection: { _id: 0 } })
@@ -699,6 +766,27 @@ async function handleRoute(request, { params }) {
         position: { ...position, _id: undefined, status: 'closed', closePrice, pnl, closedAt },
         balance: updatedUser.balance,
       })
+    }
+
+    // POST /api/positions/{id}/modify  — update Stop Loss / Take Profit
+    if (path[0] === 'positions' && path[2] === 'modify' && method === 'POST') {
+      const user = await getAuthUser(request, database)
+      if (!user) return err('Unauthorized', 401)
+      const posId = path[1]
+      const body = await request.json()
+      const position = await database.collection('positions').findOne({ id: posId, userId: user.id })
+      if (!position) return err('Position not found', 404)
+      if (position.status !== 'open') return err('Position already closed')
+      const stops = validateStops(position.side, position.entryPrice, body.stopLoss, body.takeProfit)
+      if (stops.error) return err(stops.error)
+      await database.collection('positions').updateOne(
+        { id: posId },
+        { $set: { stopLoss: stops.sl, takeProfit: stops.tp } }
+      )
+      const updated = await database.collection('positions').findOne({ id: posId }, { projection: { _id: 0 } })
+      // trigger immediately if the new level is already crossed
+      await checkAndTriggerStops(database, user)
+      return json({ position: updated })
     }
 
     // ===== PAYMENTS (NOWPayments) =====
