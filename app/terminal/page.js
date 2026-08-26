@@ -8,15 +8,21 @@ import { Toaster, toast } from 'sonner'
 import { AppDrawer } from '@/components/app-nav'
 import { SymbolIcon } from '@/components/symbol-icon'
 import { useLang } from '@/lib/i18n'
+import { useTheme, ThemeToggle } from '@/lib/theme'
 import { Wallet, LogOut, LayoutDashboard, X, Menu, CandlestickChart, ArrowLeftRight, ListOrdered, LineChart, Home as HomeIcon } from 'lucide-react'
 
 const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d']
 const INTERVAL_SEC = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 }
 const LEVERAGES = [1, 2, 5, 10, 20, 50, 100]
 
+const chartColors = (light) => light
+  ? { bg: '#ffffff', text: '#6b7280', grid: '#eceef0', border: '#e2e4e6', up: '#00b34a', down: '#e11d48' }
+  : { bg: '#050505', text: '#555555', grid: '#0f0f0f', border: '#1a1a1a', up: '#00FF66', down: '#ff3b5c' }
+
 const App = () => {
   const router = useRouter()
   const { t } = useLang()
+  const { light } = useTheme()
   const [user, setUser] = useState(null)
   const [symbols, setSymbols] = useState([])
   const [quotes, setQuotes] = useState({})
@@ -53,6 +59,38 @@ const App = () => {
 
   selectedRef.current = selected
   intervalStateRef.current = chartInterval
+
+  // ---------- theme tokens ----------
+  const GREEN = light ? 'text-[#00b34a]' : 'text-[#00FF66]'
+  const RED = light ? 'text-[#e11d48]' : 'text-[#ff3b5c]'
+  const greenHex = light ? '#00b34a' : '#00FF66'
+  const redHex = light ? '#e11d48' : '#ff3b5c'
+  const T = {
+    page: light ? 'bg-[#f5f6f5] text-gray-900' : 'bg-black text-white',
+    header: light ? 'bg-white border-black/5' : 'bg-black border-white/5',
+    bar: light ? 'bg-black/[0.02] border-black/5' : 'bg-white/[0.02] border-white/5',
+    border: light ? 'border-black/5' : 'border-white/5',
+    border10: light ? 'border-black/10' : 'border-white/10',
+    aside: light ? 'bg-white border-black/5' : 'border-white/5',
+    icon: light ? 'text-gray-500 hover:text-gray-900' : 'text-white/70 hover:text-white',
+    iconFaint: light ? 'text-gray-400 hover:text-gray-900' : 'text-white/50 hover:text-white',
+    sub: light ? 'text-gray-500' : 'text-white/40',
+    faint: light ? 'text-gray-400' : 'text-white/35',
+    fainter: light ? 'text-gray-400' : 'text-white/30',
+    faintest: light ? 'text-gray-300' : 'text-white/25',
+    label: light ? 'text-gray-400' : 'text-white/30',
+    panel: light ? 'bg-black/[0.02] border-black/5' : 'bg-white/[0.03] border-white/5',
+    input: light ? 'bg-black/[0.03] border-black/10 focus:border-[#00b34a]/60 placeholder:text-gray-400' : 'bg-white/5 border-white/10 focus:border-[#00FF66]/50',
+    rowHover: light ? 'hover:bg-black/[0.04]' : 'hover:bg-white/5',
+    tabActive: light ? 'bg-black/[0.06] text-gray-900' : 'bg-white/10 text-white',
+    tabIdle: light ? 'text-gray-400 hover:text-gray-900' : 'text-white/40 hover:text-white',
+    modal: light ? 'border-black/10 bg-white' : 'border-white/10 bg-[#0a0a0a]',
+    posRow: light ? 'bg-black/[0.03]' : 'bg-white/[0.03]',
+    histRow: light ? 'bg-black/[0.02]' : 'bg-white/[0.02]',
+    closeBtn: light ? 'bg-black/5 text-gray-400 hover:bg-[#e11d48]/10 hover:text-[#e11d48]' : 'bg-white/5 text-white/40 hover:bg-[#ff3b5c]/15 hover:text-[#ff3b5c]',
+    activeWatch: light ? 'bg-[#00b34a]/10 border border-[#00b34a]/25' : 'bg-[#00FF66]/10 border border-[#00FF66]/20',
+    chip: light ? 'bg-black/5 text-gray-400 hover:text-gray-900' : 'bg-white/5 text-white/40 hover:text-white',
+  }
 
   // ---------- data refresh ----------
   const refreshPositions = useCallback(async () => {
@@ -190,17 +228,18 @@ const App = () => {
   // ---------- chart setup ----------
   useEffect(() => {
     if (!chartContainerRef.current) return
+    const c = chartColors(typeof window !== 'undefined' && localStorage.getItem('rm_theme') === 'light')
     const chart = createChart(chartContainerRef.current, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: '#050505' }, textColor: '#555', fontFamily: "'Inter', sans-serif" },
-      grid: { vertLines: { color: '#0f0f0f' }, horzLines: { color: '#0f0f0f' } },
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#1a1a1a' },
-      rightPriceScale: { borderColor: '#1a1a1a' },
+      layout: { background: { type: ColorType.Solid, color: c.bg }, textColor: c.text, fontFamily: "'Inter', sans-serif" },
+      grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: c.border },
+      rightPriceScale: { borderColor: c.border },
       crosshair: { mode: 0 },
       localization: { locale: 'en-US' },
     })
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#00FF66', downColor: '#ff3b5c', borderVisible: false, wickUpColor: '#00FF66', wickDownColor: '#ff3b5c',
+      upColor: c.up, downColor: c.down, borderVisible: false, wickUpColor: c.up, wickDownColor: c.down,
     })
     const markers = createSeriesMarkers(series, [])
     chartApiRef.current = chart
@@ -217,6 +256,23 @@ const App = () => {
     }
   }, [])
 
+  // ---------- theme -> chart colors ----------
+  useEffect(() => {
+    const chart = chartApiRef.current
+    const series = seriesRef.current
+    if (!chart || !series) return
+    const c = chartColors(light)
+    try {
+      chart.applyOptions({
+        layout: { background: { type: ColorType.Solid, color: c.bg }, textColor: c.text },
+        grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+        timeScale: { borderColor: c.border },
+        rightPriceScale: { borderColor: c.border },
+      })
+      series.applyOptions({ upColor: c.up, downColor: c.down, wickUpColor: c.up, wickDownColor: c.down })
+    } catch (e) {}
+  }, [light])
+
   // ---------- trade markers + entry price lines on chart (no text legends) ----------
   useEffect(() => {
     if (!seriesRef.current) return
@@ -227,7 +283,7 @@ const App = () => {
       markers.push({
         time: bucket(p.openedAt),
         position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
-        color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+        color: p.side === 'buy' ? greenHex : redHex,
         shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
       })
       if (p.closedAt) {
@@ -243,7 +299,7 @@ const App = () => {
       markers.push({
         time: bucket(p.openedAt),
         position: p.side === 'buy' ? 'belowBar' : 'aboveBar',
-        color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+        color: p.side === 'buy' ? greenHex : redHex,
         shape: p.side === 'buy' ? 'arrowUp' : 'arrowDown',
       })
     })
@@ -265,7 +321,7 @@ const App = () => {
         try {
           return seriesRef.current.createPriceLine({
             price: p.entryPrice,
-            color: p.side === 'buy' ? '#00FF66' : '#ff3b5c',
+            color: p.side === 'buy' ? greenHex : redHex,
             lineWidth: 1,
             lineStyle: 2,
             axisLabelVisible: true,
@@ -274,7 +330,7 @@ const App = () => {
         } catch (e) { return null }
       })
       .filter(Boolean)
-  }, [positions, closedPositions, selected, chartInterval])
+  }, [positions, closedPositions, selected, chartInterval, greenHex, redHex])
 
   // ---------- live bid/ask lines on chart ----------
   useEffect(() => {
@@ -289,17 +345,17 @@ const App = () => {
     const ask = q.price + half
     try {
       if (!askLineRef.current) {
-        askLineRef.current = series.createPriceLine({ price: ask, color: '#00FF66', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
+        askLineRef.current = series.createPriceLine({ price: ask, color: greenHex, lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
       } else {
-        askLineRef.current.applyOptions({ price: ask })
+        askLineRef.current.applyOptions({ price: ask, color: greenHex })
       }
       if (!bidLineRef.current) {
-        bidLineRef.current = series.createPriceLine({ price: bid, color: '#ff3b5c', lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
+        bidLineRef.current = series.createPriceLine({ price: bid, color: redHex, lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: '' })
       } else {
-        bidLineRef.current.applyOptions({ price: bid })
+        bidLineRef.current.applyOptions({ price: bid, color: redHex })
       }
     } catch (e) {}
-  }, [quotes, selected, symbols])
+  }, [quotes, selected, symbols, greenHex, redHex])
 
   // ---------- load candles ----------
   useEffect(() => {
@@ -398,18 +454,18 @@ const App = () => {
       <button
         data-testid={`${testPrefix}-${s.symbol}`}
         onClick={() => pickSymbol(s.symbol)}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition ${active ? 'bg-[#00FF66]/10 border border-[#00FF66]/20' : 'hover:bg-white/5 border border-transparent'}`}
+        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition ${active ? T.activeWatch : `${T.rowHover} border border-transparent`}`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <SymbolIcon symbol={s.symbol} type={s.type} size={26} />
           <div className="min-w-0">
             <div className="text-sm font-semibold">{s.symbol}</div>
-            <div className="text-[11px] text-white/35 truncate">{s.name}</div>
+            <div className={`text-[11px] truncate ${T.faint}`}>{s.name}</div>
           </div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-sm font-mono">{q?.price ? fmtPrice(q.price, s.decimals) : '—'}</div>
-          <div className={`text-[11px] font-mono ${up ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+          <div className={`text-[11px] font-mono ${up ? GREEN : RED}`}>
             {q?.changePercent != null ? `${up ? '+' : ''}${q.changePercent.toFixed(2)}%` : ''}
           </div>
         </div>
@@ -419,15 +475,15 @@ const App = () => {
 
   const marketWatchList = (testPrefix) => (
     <>
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-2 pb-1">{t('Crypto')}</div>
+      <div className={`text-[10px] uppercase tracking-widest px-3 pt-2 pb-1 ${T.label}`}>{t('Crypto')}</div>
       {cryptoSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Forex')}</div>
+      <div className={`text-[10px] uppercase tracking-widest px-3 pt-4 pb-1 ${T.label}`}>{t('Forex')}</div>
       {forexSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Metals')}</div>
+      <div className={`text-[10px] uppercase tracking-widest px-3 pt-4 pb-1 ${T.label}`}>{t('Metals')}</div>
       {metalSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Indices')}</div>
+      <div className={`text-[10px] uppercase tracking-widest px-3 pt-4 pb-1 ${T.label}`}>{t('Indices')}</div>
       {indexSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
-      <div className="text-[10px] uppercase tracking-widest text-white/30 px-3 pt-4 pb-1">{t('Stocks')}</div>
+      <div className={`text-[10px] uppercase tracking-widest px-3 pt-4 pb-1 ${T.label}`}>{t('Stocks')}</div>
       {stockSymbols.map((s) => <WatchRow key={s.symbol} s={s} testPrefix={testPrefix} />)}
     </>
   )
@@ -436,21 +492,21 @@ const App = () => {
   const orderPanel = (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-white/30 mb-2">New order — {selected}</div>
+        <div className={`text-[10px] uppercase tracking-widest mb-2 ${T.label}`}>New order — {selected}</div>
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-[#ff3b5c]/5 border border-[#ff3b5c]/15 p-2.5 text-center">
-            <div className="text-[10px] text-white/35">SELL (Bid)</div>
-            <div className="font-mono text-sm text-[#ff3b5c]" data-testid="sell-price">{midPrice ? fmtPrice(bidOf(selQuote), selMeta.decimals) : '—'}</div>
+            <div className={`text-[10px] ${T.faint}`}>SELL (Bid)</div>
+            <div className={`font-mono text-sm ${RED}`} data-testid="sell-price">{midPrice ? fmtPrice(bidOf(selQuote), selMeta.decimals) : '—'}</div>
           </div>
           <div className="rounded-lg bg-[#00FF66]/5 border border-[#00FF66]/15 p-2.5 text-center">
-            <div className="text-[10px] text-white/35">BUY (Ask)</div>
-            <div className="font-mono text-sm text-[#00FF66]" data-testid="buy-price">{midPrice ? fmtPrice(askOf(selQuote), selMeta.decimals) : '—'}</div>
+            <div className={`text-[10px] ${T.faint}`}>BUY (Ask)</div>
+            <div className={`font-mono text-sm ${GREEN}`} data-testid="buy-price">{midPrice ? fmtPrice(askOf(selQuote), selMeta.decimals) : '—'}</div>
           </div>
         </div>
       </div>
 
       <div>
-        <label className="text-[11px] text-white/40 block mb-1.5">Lot size (units)</label>
+        <label className={`text-[11px] block mb-1.5 ${T.sub}`}>Lot size (units)</label>
         <input
           data-testid="lots-input"
           type="number"
@@ -458,34 +514,34 @@ const App = () => {
           step="0.01"
           value={lots}
           onChange={(e) => setLots(e.target.value)}
-          className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-[#00FF66]/50"
+          className={`w-full rounded-lg border px-3 py-2.5 text-sm font-mono focus:outline-none ${T.input}`}
         />
         <div className="flex gap-1.5 mt-2">
           {['0.01', '0.1', '0.5', '1'].map((v) => (
-            <button key={v} onClick={() => setLots(v)} className={`flex-1 text-[11px] py-1 rounded-md border transition ${lots === v ? 'border-[#00FF66]/50 text-[#00FF66]' : 'border-white/10 text-white/40 hover:text-white'}`}>{v}</button>
+            <button key={v} onClick={() => setLots(v)} className={`flex-1 text-[11px] py-1 rounded-md border transition ${lots === v ? (light ? 'border-[#00b34a]/50 text-[#00b34a]' : 'border-[#00FF66]/50 text-[#00FF66]') : `${T.border10} ${T.tabIdle}`}`}>{v}</button>
           ))}
         </div>
       </div>
 
       <div>
-        <label className="text-[11px] text-white/40 block mb-1.5">Leverage <span className="text-white/25">(max 1:{maxLev})</span></label>
+        <label className={`text-[11px] block mb-1.5 ${T.sub}`}>Leverage <span className={T.faintest}>(max 1:{maxLev})</span></label>
         <div className="grid grid-cols-4 gap-1.5">
           {availableLeverages.map((l) => (
-            <button key={l} data-testid={`leverage-${l}`} onClick={() => setLeverage(l)} className={`text-[11px] py-1.5 rounded-md border font-mono transition ${leverage === l ? 'border-[#00FF66]/60 bg-[#00FF66]/10 text-[#00FF66]' : 'border-white/10 text-white/40 hover:text-white'}`}>
+            <button key={l} data-testid={`leverage-${l}`} onClick={() => setLeverage(l)} className={`text-[11px] py-1.5 rounded-md border font-mono transition ${leverage === l ? (light ? 'border-[#00b34a]/60 bg-[#00b34a]/10 text-[#00b34a]' : 'border-[#00FF66]/60 bg-[#00FF66]/10 text-[#00FF66]') : `${T.border10} ${T.tabIdle}`}`}>
               {l}x
             </button>
           ))}
         </div>
       </div>
 
-      <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3 space-y-1.5 text-[11px]">
+      <div className={`rounded-lg border p-3 space-y-1.5 text-[11px] ${T.panel}`}>
         {(selMeta.contractSize || 1) > 1 && (
-          <div className="flex justify-between"><span className="text-white/35">Units ({selMeta.contractSize.toLocaleString()}/lot)</span><span className="font-mono" data-testid="order-units">{contractUnits.toLocaleString()}</span></div>
+          <div className="flex justify-between"><span className={T.faint}>Units ({selMeta.contractSize.toLocaleString()}/lot)</span><span className="font-mono" data-testid="order-units">{contractUnits.toLocaleString()}</span></div>
         )}
-        <div className="flex justify-between"><span className="text-white/35">Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(orderNotional)}</span></div>
-        <div className="flex justify-between"><span className="text-white/35">Required margin</span><span className="font-mono" data-testid="order-margin">{fmtMoney(requiredMargin)}</span></div>
-        <div className="flex justify-between"><span className="text-white/35">Free margin</span><span className="font-mono">{fmtMoney(freeMargin)}</span></div>
-        <div className="flex justify-between"><span className="text-white/35">Spread</span><span className="font-mono">{selQuote?.spreadPips != null ? `${selQuote.spreadPips.toFixed(1)} pips` : '—'}</span></div>
+        <div className="flex justify-between"><span className={T.faint}>Notional value</span><span className="font-mono" data-testid="order-notional">{fmtMoney(orderNotional)}</span></div>
+        <div className="flex justify-between"><span className={T.faint}>Required margin</span><span className="font-mono" data-testid="order-margin">{fmtMoney(requiredMargin)}</span></div>
+        <div className="flex justify-between"><span className={T.faint}>Free margin</span><span className="font-mono">{fmtMoney(freeMargin)}</span></div>
+        <div className="flex justify-between"><span className={T.faint}>Spread</span><span className="font-mono">{selQuote?.spreadPips != null ? `${selQuote.spreadPips.toFixed(1)} pips` : '—'}</span></div>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -498,8 +554,8 @@ const App = () => {
       </div>
 
       {balance <= 0 && (
-        <div className="rounded-lg border border-[#00FF66]/20 bg-[#00FF66]/5 p-3 text-[11px] text-white/60">
-          Your balance is $0. <button onClick={() => router.push('/dashboard')} className="text-[#00FF66] font-semibold hover:underline">Make a deposit</button> to start trading.
+        <div className={`rounded-lg border p-3 text-[11px] ${light ? 'border-[#00b34a]/20 bg-[#00b34a]/5 text-gray-600' : 'border-[#00FF66]/20 bg-[#00FF66]/5 text-white/60'}`}>
+          Your balance is $0. <button onClick={() => router.push('/dashboard')} className={`font-semibold hover:underline ${GREEN}`}>Make a deposit</button> to start trading.
         </div>
       )}
     </div>
@@ -539,10 +595,10 @@ const App = () => {
   const positionsPanel = (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex items-center gap-1 px-3 pt-2 shrink-0">
-        <button data-testid="tab-open-positions" onClick={() => setTab('open')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'open' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
+        <button data-testid="tab-open-positions" onClick={() => setTab('open')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'open' ? T.tabActive : T.tabIdle}`}>
           {t('Positions')} ({positions.length})
         </button>
-        <button data-testid="tab-history" onClick={() => setTab('history')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'history' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}>
+        <button data-testid="tab-history" onClick={() => setTab('history')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition ${tab === 'history' ? T.tabActive : T.tabIdle}`}>
           History ({closedPositions.length})
         </button>
       </div>
@@ -551,14 +607,14 @@ const App = () => {
         <div className="px-3 pt-2 shrink-0">
           <div className="flex gap-1 overflow-x-auto pb-1" data-testid="history-filters">
             {HIST_FILTERS.map((f) => (
-              <button key={f.k} data-testid={`hist-filter-${f.k}`} onClick={() => setHistFilter(f.k)} className={`px-3 py-1 text-[11px] rounded-full font-medium whitespace-nowrap transition ${histFilter === f.k ? 'bg-[#00FF66] text-black' : 'bg-white/5 text-white/40 hover:text-white'}`}>
+              <button key={f.k} data-testid={`hist-filter-${f.k}`} onClick={() => setHistFilter(f.k)} className={`px-3 py-1 text-[11px] rounded-full font-medium whitespace-nowrap transition ${histFilter === f.k ? 'bg-[#00FF66] text-black' : T.chip}`}>
                 {f.l}
               </button>
             ))}
           </div>
-          <div data-testid="history-summary" className="flex items-center justify-between rounded-lg bg-white/[0.03] border border-white/5 px-3.5 py-2 mt-1.5 text-[11px]">
-            <span className="text-white/40">{t('Trades')}: <span className="text-white font-mono">{histList.length}</span>{histList.length > 0 && <span className="text-white/25 ml-2">({histWins}W / {histList.length - histWins}L)</span>}</span>
-            <span className="text-white/40">{t('Total PnL')}: <span data-testid="history-total-pnl" className={`font-mono font-semibold ${histTotal >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(histTotal)}</span></span>
+          <div data-testid="history-summary" className={`flex items-center justify-between rounded-lg border px-3.5 py-2 mt-1.5 text-[11px] ${T.panel}`}>
+            <span className={T.faint}>{t('Trades')}: <span className={`font-mono ${light ? 'text-gray-900' : 'text-white'}`}>{histList.length}</span>{histList.length > 0 && <span className={`ml-2 ${T.faintest}`}>({histWins}W / {histList.length - histWins}L)</span>}</span>
+            <span className={T.faint}>{t('Total PnL')}: <span data-testid="history-total-pnl" className={`font-mono font-semibold ${histTotal >= 0 ? GREEN : RED}`}>{fmtSignedMoney(histTotal)}</span></span>
           </div>
         </div>
       )}
@@ -570,20 +626,20 @@ const App = () => {
           const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
           const cur = q?.price ? (p.side === 'buy' ? bidOf(q) : askOf(q)) : null
           return (
-            <div key={p.id} data-testid={`position-row-${p.id}`} className="flex items-center justify-between rounded-2xl bg-white/[0.03] px-4 py-3">
+            <div key={p.id} data-testid={`position-row-${p.id}`} className={`flex items-center justify-between rounded-2xl px-4 py-3 ${T.posRow}`}>
               <div className="flex items-center gap-3 min-w-0">
                 <SymbolIcon symbol={p.symbol} type={meta.type} size={32} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold">{p.symbol}</span>
-                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side} {p.lots}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00b34a]' : 'bg-[#ff3b5c]/15 text-[#e11d48]'}`}>{p.side} {p.lots}</span>
                   </div>
-                  <div className="text-[11px] text-white/30 font-mono mt-0.5">{fmtPrice(p.entryPrice, meta.decimals)} → {cur ? fmtPrice(cur, meta.decimals) : '—'}</div>
+                  <div className={`text-[11px] font-mono mt-0.5 ${T.fainter}`}>{fmtPrice(p.entryPrice, meta.decimals)} → {cur ? fmtPrice(cur, meta.decimals) : '—'}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2.5 shrink-0">
-                <span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(pnl)}</span>
-                <button data-testid={`close-position-${p.id}`} disabled={closingId === p.id} onClick={() => closePosition(p.id)} title="Close position" className="h-8 w-8 flex items-center justify-center rounded-full bg-white/5 text-white/40 hover:bg-[#ff3b5c]/15 hover:text-[#ff3b5c] transition disabled:opacity-40">
+                <span className={`font-mono text-sm font-semibold ${pnl >= 0 ? GREEN : RED}`}>{fmtSignedMoney(pnl)}</span>
+                <button data-testid={`close-position-${p.id}`} disabled={closingId === p.id} onClick={() => closePosition(p.id)} title="Close position" className={`h-8 w-8 flex items-center justify-center rounded-full transition disabled:opacity-40 ${T.closeBtn}`}>
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -591,113 +647,114 @@ const App = () => {
           )
         })}
         {tab === 'open' && positions.length === 0 && (
-          <div className="py-10 text-center text-white/25 text-xs">No open positions. Place your first trade →</div>
+          <div className={`py-10 text-center text-xs ${T.faintest}`}>No open positions. Place your first trade →</div>
         )}
 
         {tab === 'history' && histList.map((p) => {
           const meta = symbols.find((s) => s.symbol === p.symbol) || { decimals: 2 }
           return (
-            <div key={p.id} data-testid={`history-row-${p.id}`} className="flex items-center justify-between rounded-2xl bg-white/[0.02] px-4 py-3">
+            <div key={p.id} data-testid={`history-row-${p.id}`} className={`flex items-center justify-between rounded-2xl px-4 py-3 ${T.histRow}`}>
               <div className="flex items-center gap-3 min-w-0">
                 <SymbolIcon symbol={p.symbol} type={meta.type} size={32} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold">{p.symbol}</span>
-                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00FF66]' : 'bg-[#ff3b5c]/15 text-[#ff3b5c]'}`}>{p.side} {p.lots}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide ${p.side === 'buy' ? 'bg-[#00FF66]/15 text-[#00b34a]' : 'bg-[#ff3b5c]/15 text-[#e11d48]'}`}>{p.side} {p.lots}</span>
                   </div>
-                  <div className="text-[11px] text-white/30 mt-0.5">{p.closedAt ? new Date(p.closedAt).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                  <div className={`text-[11px] mt-0.5 ${T.fainter}`}>{p.closedAt ? new Date(p.closedAt).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</div>
                 </div>
               </div>
-              <span className={`font-mono text-sm font-semibold shrink-0 ${(p.pnl || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(p.pnl)}</span>
+              <span className={`font-mono text-sm font-semibold shrink-0 ${(p.pnl || 0) >= 0 ? GREEN : RED}`}>{fmtSignedMoney(p.pnl)}</span>
             </div>
           )
         })}
         {tab === 'history' && histList.length === 0 && (
-          <div className="py-10 text-center text-white/25 text-xs">{t('No trades in this period.')}</div>
+          <div className={`py-10 text-center text-xs ${T.faintest}`}>{t('No trades in this period.')}</div>
         )}
       </div>
     </div>
   )
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white overflow-hidden">
-      <Toaster position="top-right" theme="dark" richColors />
+    <div className={`h-screen flex flex-col overflow-hidden ${T.page}`}>
+      <Toaster position="top-right" theme={light ? 'light' : 'dark'} richColors />
 
       {/* MENU BAR */}
-      <header className="h-14 shrink-0 border-b border-white/5 flex items-center justify-between px-4 bg-black z-30">
+      <header className={`h-14 shrink-0 border-b flex items-center justify-between px-4 z-30 ${T.header}`}>
         <div className="flex items-center gap-3">
-          <button data-testid="hamburger-btn" onClick={() => setDrawerOpen(true)} className="p-1.5 -ml-1.5 text-white/70 hover:text-white transition">
+          <button data-testid="hamburger-btn" onClick={() => setDrawerOpen(true)} className={`p-1.5 -ml-1.5 transition ${T.icon}`}>
             <Menu className="h-5 w-5" />
           </button>
           <button onClick={() => router.push('/home')} className="flex items-center gap-2">
             <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
-            <span className="font-bold text-sm">RAW<span className="text-[#00FF66]">MARKETS</span></span>
+            <span className="font-bold text-sm">RAW<span className={GREEN}>MARKETS</span></span>
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button data-testid="deposit-nav-btn" onClick={() => router.push('/dashboard')} className="flex items-center gap-1.5 text-xs font-semibold bg-[#00FF66] text-black px-3.5 py-2 rounded-full hover:bg-[#00e65c] transition">
             <Wallet className="h-3.5 w-3.5" /> Deposit
           </button>
-          <button data-testid="dashboard-nav-btn" onClick={() => router.push('/dashboard')} className="hidden md:block p-2 text-white/50 hover:text-white transition" title="Dashboard">
+          <button data-testid="dashboard-nav-btn" onClick={() => router.push('/dashboard')} className={`hidden md:block p-2 transition ${T.iconFaint}`} title="Dashboard">
             <LayoutDashboard className="h-4 w-4" />
           </button>
-          <button data-testid="logout-btn" onClick={() => logout(router)} className="p-2 text-white/50 hover:text-white transition" title="Sign out">
+          <button data-testid="logout-btn" onClick={() => logout(router)} className={`p-2 transition ${T.iconFaint}`} title="Sign out">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </header>
 
       {/* ACCOUNT HEADER */}
-      <div data-testid="account-header" className="h-11 shrink-0 border-b border-white/5 bg-white/[0.02] flex items-center gap-6 px-4 overflow-x-auto whitespace-nowrap text-xs">
-        <div className="shrink-0"><span className="text-white/35">Balance </span><span data-testid="acct-balance" className="font-mono font-semibold">{fmtMoney(balance)}</span></div>
-        <div className="shrink-0"><span className="text-white/35">Equity </span><span data-testid="acct-equity" className="font-mono font-semibold">{fmtMoney(equity)}</span></div>
-        <div className="shrink-0"><span className="text-white/35">Floating PnL </span><span data-testid="acct-floating-pnl" className={`font-mono font-semibold ${floatingPnl >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>{fmtSignedMoney(floatingPnl)}</span></div>
-        <div className="shrink-0"><span className="text-white/35">Margin </span><span data-testid="acct-margin" className="font-mono">{fmtMoney(usedMargin)}</span></div>
-        <div className="shrink-0"><span className="text-white/35">Free margin </span><span data-testid="acct-free-margin" className="font-mono">{fmtMoney(freeMargin)}</span></div>
-        {marginLevel != null && <div className="shrink-0"><span className="text-white/35">Margin level </span><span className="font-mono">{marginLevel.toFixed(0)}%</span></div>}
+      <div data-testid="account-header" className={`h-11 shrink-0 border-b flex items-center gap-6 px-4 overflow-x-auto whitespace-nowrap text-xs ${T.bar}`}>
+        <div className="shrink-0"><span className={T.faint}>Balance </span><span data-testid="acct-balance" className="font-mono font-semibold">{fmtMoney(balance)}</span></div>
+        <div className="shrink-0"><span className={T.faint}>Equity </span><span data-testid="acct-equity" className="font-mono font-semibold">{fmtMoney(equity)}</span></div>
+        <div className="shrink-0"><span className={T.faint}>Floating PnL </span><span data-testid="acct-floating-pnl" className={`font-mono font-semibold ${floatingPnl >= 0 ? GREEN : RED}`}>{fmtSignedMoney(floatingPnl)}</span></div>
+        <div className="shrink-0"><span className={T.faint}>Margin </span><span data-testid="acct-margin" className="font-mono">{fmtMoney(usedMargin)}</span></div>
+        <div className="shrink-0"><span className={T.faint}>Free margin </span><span data-testid="acct-free-margin" className="font-mono">{fmtMoney(freeMargin)}</span></div>
+        {marginLevel != null && <div className="shrink-0"><span className={T.faint}>Margin level </span><span className="font-mono">{marginLevel.toFixed(0)}%</span></div>}
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* WATCHLIST (desktop) */}
-        <aside className="w-60 shrink-0 border-r border-white/5 overflow-y-auto p-2 hidden md:block">
+        <aside className={`w-60 shrink-0 border-r overflow-y-auto p-2 hidden md:block ${T.aside}`}>
           {marketWatchList('watchlist')}
         </aside>
 
         {/* CENTER */}
         <main className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* symbol header */}
-          <div className="h-14 shrink-0 border-b border-white/5 flex items-center justify-between gap-2 px-4 overflow-x-auto">
+          <div className={`h-14 shrink-0 border-b flex items-center justify-between gap-2 px-4 overflow-x-auto ${T.border}`}>
             <div className="flex items-center gap-3 shrink-0">
               <select
                 data-testid="mobile-symbol-select"
                 value={selected}
                 onChange={(e) => setSelected(e.target.value)}
-                className="md:hidden bg-white/5 border border-white/10 rounded-md text-sm font-bold px-2 py-1.5 focus:outline-none focus:border-[#00FF66]/50"
+                className={`md:hidden border rounded-md text-sm font-bold px-2 py-1.5 focus:outline-none ${T.input}`}
               >
                 {(symbols.length ? symbols : [{ symbol: selected }]).map((s) => (
-                  <option key={s.symbol} value={s.symbol} className="bg-black">{s.symbol}</option>
+                  <option key={s.symbol} value={s.symbol} className={light ? 'bg-white' : 'bg-black'}>{s.symbol}</option>
                 ))}
               </select>
               <div className="hidden md:block">
                 <div className="font-bold" data-testid="selected-symbol">{selected}</div>
-                <div className="text-[11px] text-white/35">{selMeta.name}</div>
+                <div className={`text-[11px] ${T.faint}`}>{selMeta.name}</div>
               </div>
-              <div data-testid="selected-price" className={`text-lg sm:text-xl font-mono font-semibold ${(selQuote?.changePercent || 0) >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+              <div data-testid="selected-price" className={`text-lg sm:text-xl font-mono font-semibold ${(selQuote?.changePercent || 0) >= 0 ? GREEN : RED}`}>
                 {selQuote?.price ? fmtPrice(selQuote.price, selMeta.decimals) : '—'}
               </div>
               {selQuote?.changePercent != null && (
-                <div className={`text-xs font-mono ${selQuote.changePercent >= 0 ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+                <div className={`text-xs font-mono ${selQuote.changePercent >= 0 ? GREEN : RED}`}>
                   {selQuote.changePercent >= 0 ? '+' : ''}{selQuote.changePercent.toFixed(2)}%
                 </div>
               )}
-              <div className="hidden lg:flex gap-4 text-[11px] text-white/35 font-mono">
+              <div className={`hidden lg:flex gap-4 text-[11px] font-mono ${T.faint}`}>
                 <span>H {selQuote?.high ? fmtPrice(selQuote.high, selMeta.decimals) : '—'}</span>
                 <span>L {selQuote?.low ? fmtPrice(selQuote.low, selMeta.decimals) : '—'}</span>
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
               {INTERVALS.map((iv) => (
-                <button key={iv} data-testid={`interval-${iv}`} onClick={() => setChartInterval(iv)} className={`px-2 sm:px-2.5 py-1 text-xs rounded-md font-medium transition ${chartInterval === iv ? 'bg-[#00FF66] text-black' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
+                <button key={iv} data-testid={`interval-${iv}`} onClick={() => setChartInterval(iv)} className={`px-2 sm:px-2.5 py-1 text-xs rounded-md font-medium transition ${chartInterval === iv ? 'bg-[#00FF66] text-black' : `${T.tabIdle} ${T.rowHover}`}`}>
                   {iv}
                 </button>
               ))}
@@ -708,14 +765,14 @@ const App = () => {
           <div className={`flex-1 relative min-h-0 ${mobileTab !== 'chart' ? 'hidden md:block' : ''}`}>
             <div ref={chartContainerRef} className="absolute inset-0" data-testid="chart-container" />
             {chartError && (
-              <div className="absolute inset-0 flex items-center justify-center text-white/30 text-sm bg-black/60">{chartError}</div>
+              <div className={`absolute inset-0 flex items-center justify-center text-sm ${light ? 'text-gray-400 bg-white/60' : 'text-white/30 bg-black/60'}`}>{chartError}</div>
             )}
           </div>
 
           {/* mobile TRADE view */}
           <div data-testid="mobile-trade-view" className={`md:hidden flex-1 min-h-0 overflow-y-auto p-4 ${mobileTab === 'trade' ? 'block' : 'hidden'}`}>
             {orderPanel}
-            <div className="mt-6 h-72 rounded-xl border border-white/5">
+            <div className={`mt-6 h-72 rounded-xl border ${T.border}`}>
               {positionsPanel}
             </div>
           </div>
@@ -732,14 +789,14 @@ const App = () => {
                 data-testid="markets-category-select"
                 value={marketCat}
                 onChange={(e) => setMarketCat(e.target.value)}
-                className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm focus:outline-none focus:border-[#00FF66]/50"
+                className={`w-full rounded-xl border px-4 py-3 text-sm focus:outline-none ${T.input}`}
               >
-                <option value="all" className="bg-black">{t('Category')}: {t('All')}</option>
-                <option value="crypto" className="bg-black">{t('Crypto')}</option>
-                <option value="forex" className="bg-black">{t('Forex')}</option>
-                <option value="metal" className="bg-black">{t('Metals')}</option>
-                <option value="index" className="bg-black">{t('Indices')}</option>
-                <option value="stock" className="bg-black">{t('Stocks')}</option>
+                <option value="all" className={light ? 'bg-white' : 'bg-black'}>{t('Category')}: {t('All')}</option>
+                <option value="crypto" className={light ? 'bg-white' : 'bg-black'}>{t('Crypto')}</option>
+                <option value="forex" className={light ? 'bg-white' : 'bg-black'}>{t('Forex')}</option>
+                <option value="metal" className={light ? 'bg-white' : 'bg-black'}>{t('Metals')}</option>
+                <option value="index" className={light ? 'bg-white' : 'bg-black'}>{t('Indices')}</option>
+                <option value="stock" className={light ? 'bg-white' : 'bg-black'}>{t('Stocks')}</option>
               </select>
             </div>
             <div className="flex-1 overflow-y-auto px-2 pb-3">
@@ -751,18 +808,18 @@ const App = () => {
                     key={s.symbol}
                     data-testid={`mobile-markets-${s.symbol}`}
                     onClick={() => setPickedAsset(s)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left hover:bg-white/5 transition"
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition ${T.rowHover}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <SymbolIcon symbol={s.symbol} type={s.type} size={28} />
                       <div className="min-w-0">
                         <div className="text-sm font-semibold">{s.symbol}</div>
-                        <div className="text-[11px] text-white/35 truncate">{s.name}</div>
+                        <div className={`text-[11px] truncate ${T.faint}`}>{s.name}</div>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-mono">{q?.price ? fmtPrice(q.price, s.decimals) : '—'}</div>
-                      <div className={`text-[11px] font-mono ${up ? 'text-[#00FF66]' : 'text-[#ff3b5c]'}`}>
+                      <div className={`text-[11px] font-mono ${up ? GREEN : RED}`}>
                         {q?.changePercent != null ? `${up ? '+' : ''}${q.changePercent.toFixed(2)}%` : ''}
                       </div>
                     </div>
@@ -773,13 +830,13 @@ const App = () => {
           </div>
 
           {/* positions (desktop / mobile chart tab) */}
-          <div className={`h-56 shrink-0 border-t border-white/5 ${mobileTab === 'chart' ? 'flex' : 'hidden md:flex'} flex-col`}>
+          <div className={`h-56 shrink-0 border-t ${T.border} ${mobileTab === 'chart' ? 'flex' : 'hidden md:flex'} flex-col`}>
             {positionsPanel}
           </div>
         </main>
 
         {/* ORDER PANEL (desktop) */}
-        <aside className="w-72 shrink-0 border-l border-white/5 p-4 overflow-y-auto hidden md:block">
+        <aside className={`w-72 shrink-0 border-l p-4 overflow-y-auto hidden md:block ${T.border}`}>
           {orderPanel}
         </aside>
       </div>
@@ -788,28 +845,28 @@ const App = () => {
       {pickedAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setPickedAsset(null)} />
-          <div data-testid="terminal-asset-modal" className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0a0a] p-6 shadow-2xl">
-            <button data-testid="terminal-asset-modal-close" onClick={() => setPickedAsset(null)} className="absolute top-4 right-4 text-white/40 hover:text-white">
+          <div data-testid="terminal-asset-modal" className={`relative w-full max-w-sm rounded-2xl border p-6 shadow-2xl ${T.modal}`}>
+            <button data-testid="terminal-asset-modal-close" onClick={() => setPickedAsset(null)} className={`absolute top-4 right-4 ${T.iconFaint}`}>
               <X className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-3">
               <SymbolIcon symbol={pickedAsset.symbol} type={pickedAsset.type} size={40} />
               <div>
                 <div className="font-bold">{pickedAsset.symbol}</div>
-                <div className="text-xs text-white/40">{pickedAsset.name}</div>
+                <div className={`text-xs ${T.sub}`}>{pickedAsset.name}</div>
               </div>
               <div className="ml-auto text-right">
                 <div className="font-mono text-sm">{quotes[pickedAsset.symbol]?.price ? fmtPrice(quotes[pickedAsset.symbol].price, pickedAsset.decimals) : '—'}</div>
               </div>
             </div>
-            <p className="text-xs text-white/35 mt-4">{t('What would you like to do?')}</p>
+            <p className={`text-xs mt-4 ${T.faint}`}>{t('What would you like to do?')}</p>
             <div className="grid grid-cols-2 gap-3 mt-3">
               <button
                 data-testid="terminal-asset-chart-btn"
                 onClick={() => { setSelected(pickedAsset.symbol); setMobileTab('chart'); setPickedAsset(null) }}
-                className="flex flex-col items-center gap-2 rounded-xl border border-white/10 py-4 hover:border-[#00FF66]/40 hover:bg-white/[0.03] transition"
+                className={`flex flex-col items-center gap-2 rounded-xl border py-4 transition ${light ? 'border-black/10 hover:border-[#00b34a]/40 hover:bg-black/[0.03]' : 'border-white/10 hover:border-[#00FF66]/40 hover:bg-white/[0.03]'}`}
               >
-                <CandlestickChart className="h-5 w-5 text-[#00FF66]" />
+                <CandlestickChart className={`h-5 w-5 ${GREEN}`} />
                 <span className="text-xs font-semibold">{t('Open chart')}</span>
               </button>
               <button
@@ -826,20 +883,20 @@ const App = () => {
       )}
 
       {/* MOBILE BOTTOM NAV */}
-      <nav data-testid="mobile-bottom-nav" className="md:hidden h-16 shrink-0 border-t border-white/10 bg-black flex items-stretch z-30">
-        <button data-testid="bottomnav-home" onClick={() => router.push('/home')} className="flex-1 flex flex-col items-center justify-center gap-1 text-white/40 hover:text-white transition">
+      <nav data-testid="mobile-bottom-nav" className={`md:hidden h-16 shrink-0 border-t flex items-stretch z-30 ${light ? 'border-black/10 bg-white' : 'border-white/10 bg-black'}`}>
+        <button data-testid="bottomnav-home" onClick={() => router.push('/home')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${T.tabIdle}`}>
           <HomeIcon className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Home')}</span>
         </button>
-        <button data-testid="bottomnav-chart" onClick={() => setMobileTab('chart')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'chart' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
+        <button data-testid="bottomnav-chart" onClick={() => setMobileTab('chart')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'chart' ? GREEN : T.tabIdle}`}>
           <CandlestickChart className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Chart')}</span>
         </button>
-        <button data-testid="bottomnav-trade" onClick={() => setMobileTab('trade')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'trade' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
+        <button data-testid="bottomnav-trade" onClick={() => setMobileTab('trade')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'trade' ? GREEN : T.tabIdle}`}>
           <ArrowLeftRight className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Trade')}</span>
         </button>
-        <button data-testid="bottomnav-positions" onClick={() => setMobileTab('positions')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'positions' ? 'text-[#00FF66]' : 'text-white/40 hover:text-white'}`}>
+        <button data-testid="bottomnav-positions" onClick={() => setMobileTab('positions')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition ${mobileTab === 'positions' ? GREEN : T.tabIdle}`}>
           <ListOrdered className="h-5 w-5" />
           <span className="text-[10px] font-medium">{t('Positions')}</span>
         </button>

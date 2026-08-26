@@ -351,31 +351,15 @@ const App = () => {
       <section id="how" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
         <div className="mx-auto max-w-5xl">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">{t('Up and running in a minute.')}</h2>
-          <div className="relative mt-16">
-            {/* connecting line (desktop) */}
-            <div className={`hidden md:block absolute top-8 left-[16%] right-[16%] h-px ${light ? 'bg-gradient-to-r from-transparent via-[#00b34a]/40 to-transparent' : 'bg-gradient-to-r from-transparent via-[#00FF66]/40 to-transparent'}`} />
-            <div className="grid md:grid-cols-3 gap-10 md:gap-6">
-              {[
-                { icon: UserPlus, n: '1', title: t('Create your account'), desc: t('Sign up with just your name, email and a password. No paperwork, no waiting.') },
-                { icon: Banknote, n: '2', title: t('Fund your wallet'), desc: t('Deposit crypto — BTC, ETH, USDT and more. Funds are credited after network confirmation.') },
-                { icon: CandlestickChart, n: '3', title: t('Trade live markets'), desc: t('Open positions with up to 1:100 leverage and watch your PnL update in real time.') },
-              ].map((s, i) => (
-                <div key={s.n} className="relative flex flex-col items-center text-center group" data-testid={`how-step-${s.n}`}>
-                  <div className={`relative z-10 h-16 w-16 rounded-2xl rotate-3 group-hover:rotate-0 group-hover:scale-110 transition-all duration-300 flex items-center justify-center shadow-lg ${light ? 'bg-gradient-to-br from-[#00d957] to-[#00b34a] shadow-[#00b34a]/25' : 'bg-gradient-to-br from-[#00FF66] to-[#00c94f] shadow-[#00FF66]/20'}`}>
-                    <s.icon className="h-7 w-7 text-black" />
-                    <span className={`absolute -top-2.5 -right-2.5 h-7 w-7 rounded-full text-xs font-extrabold flex items-center justify-center border-2 ${light ? 'bg-white text-[#00b34a] border-[#00b34a]/30' : 'bg-black text-[#00FF66] border-[#00FF66]/40'}`}>{s.n}</span>
-                  </div>
-                  <div className={`mt-6 w-full rounded-2xl border p-6 transition-all duration-300 group-hover:-translate-y-1 ${T.card} ${light ? 'group-hover:border-[#00b34a]/40 group-hover:shadow-lg' : 'group-hover:border-[#00FF66]/30'}`}>
-                    <div className={`text-[10px] uppercase tracking-[0.2em] font-bold mb-2 ${GREEN}`}>{t('Step')} {s.n}</div>
-                    <h3 className="font-bold text-lg">{s.title}</h3>
-                    <p className={`text-sm leading-relaxed mt-2 ${T.fainter}`}>{s.desc}</p>
-                  </div>
-                  {i < 2 && (
-                    <ArrowRight className={`hidden md:block absolute top-6 -right-5 h-5 w-5 z-10 ${GREEN}`} />
-                  )}
-                </div>
-              ))}
-            </div>
+          {/* Full visual composition (transparent asset) — no cards/containers, keeps aspect ratio, never cropped */}
+          <div className="mt-10 sm:mt-14 flex justify-center">
+            <img
+              src="/images/how-it-works.png"
+              alt={t('Create your account, fund your wallet and trade live markets')}
+              data-testid="how-it-works-composition"
+              className="w-full max-w-2xl h-auto object-contain select-none"
+              loading="lazy"
+            />
           </div>
         </div>
       </section>

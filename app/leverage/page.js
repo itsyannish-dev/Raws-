@@ -41,11 +41,8 @@ const App = () => {
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mt-3">{t('Maximum leverage per category')}</h1>
           <p className={`mt-3 text-lg ${T.faint}`}>{t('Trade more. Power your potential.')}</p>
 
-          <div className="grid md:grid-cols-2 gap-10 items-center mt-12">
-            <div>
-              <img src="/images/leverage.png" alt="Maximum leverage per category" className="rounded-3xl w-full shadow-2xl border border-black/10" loading="lazy" />
-            </div>
-            <div className="space-y-3" data-testid="leverage-categories">
+          <div className="mt-12" data-testid="leverage-categories">
+            <div className="grid sm:grid-cols-2 gap-3 max-w-3xl">
               {CATEGORIES.map((c) => (
                 <div key={c.label} className={`rounded-2xl border px-5 py-4 ${T.card}`}>
                   <div className="flex items-center justify-between">

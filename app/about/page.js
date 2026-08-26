@@ -25,23 +25,18 @@ const App = () => {
       <SiteHeader />
       <main className="pt-28 pb-20 px-4 sm:px-6">
         <div className="mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">{t('About RAWMarkets')}</h1>
-              <p className={`mt-5 text-lg leading-relaxed ${T.faint}`}>
-                {t('We built RAWMarkets because trading should feel effortless. One clean terminal, live global markets, transparent pricing — and nothing in the way.')}
-              </p>
-              <div className="mt-8 flex items-center gap-8">
-                {[{ v: '45+', l: t('Markets') }, { v: '1–2 pips', l: t('Spread per trade') }, { v: '24/7', l: t('Crypto trading') }].map((s) => (
-                  <div key={s.l}>
-                    <div className={`text-2xl font-extrabold ${GREEN}`}>{s.v}</div>
-                    <div className={`text-xs mt-0.5 ${T.fainter}`}>{s.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <img src="/images/app-showcase.jpg" alt="RAWMarkets" className="rounded-3xl w-full max-w-md shadow-2xl border border-black/10 bg-white" loading="lazy" />
+          <div className="max-w-3xl">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">{t('About RAWMarkets')}</h1>
+            <p className={`mt-5 text-lg leading-relaxed ${T.faint}`}>
+              {t('We built RAWMarkets because trading should feel effortless. One clean terminal, live global markets, transparent pricing — and nothing in the way.')}
+            </p>
+            <div className="mt-8 flex items-center gap-10">
+              {[{ v: '45+', l: t('Markets') }, { v: '1–2 pips', l: t('Spread per trade') }, { v: '24/7', l: t('Crypto trading') }].map((s) => (
+                <div key={s.l}>
+                  <div className={`text-2xl font-extrabold ${GREEN}`}>{s.v}</div>
+                  <div className={`text-xs mt-0.5 ${T.fainter}`}>{s.l}</div>
+                </div>
+              ))}
             </div>
           </div>
 
