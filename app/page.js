@@ -6,7 +6,7 @@ import { api, fmtPrice } from '@/lib/rm'
 import { SymbolIcon } from '@/components/symbol-icon'
 import { useLang, LangToggle } from '@/lib/i18n'
 import { useTheme, ThemeToggle } from '@/lib/theme'
-import { ArrowRight, Zap, LineChart, Wallet, Bitcoin, X, ChevronDown, UserPlus, Banknote, CandlestickChart, Menu, ShieldCheck, Lock, Activity, FileCheck } from 'lucide-react'
+import { ArrowRight, Zap, LineChart, Wallet, Bitcoin, X, ChevronDown, UserPlus, Banknote, CandlestickChart, Menu, ShieldCheck, Lock, Activity, FileCheck, DollarSign, Gauge, Layers, Clock } from 'lucide-react'
 
 const FAQS = [
   { q: 'How do I start trading on RAWMarkets?', a: 'Create a free account in under a minute, deposit crypto (BTC, ETH, USDT and more) and start trading 30+ markets with live data.' },
@@ -272,6 +272,12 @@ const App = () => {
             })}
             {symbols.length === 0 && <div className={`px-5 py-12 text-center ${T.fainter}`}>{t('Loading markets…')}</div>}
           </div>
+          <div className="mt-8 flex justify-center">
+            <button data-testid="markets-create-account-btn" onClick={() => openAuth('register')} className="group inline-flex items-center gap-2 bg-[#00FF66] text-black font-semibold px-7 py-3.5 rounded-full hover:bg-[#00e65c] transition">
+              {t('Create an account to see all markets')}
+              <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
         </div>
       </section>
 
@@ -289,38 +295,37 @@ const App = () => {
               {t('Get started')} <ArrowRight className="h-4 w-4" />
             </button>
           </div>
-          <div className="order-1 md:order-2">
-            <img src="/images/trade-anywhere.png" alt="Trade anytime, anywhere" className="rounded-3xl w-full shadow-2xl border border-black/10" loading="lazy" />
+          <div className="order-1 md:order-2 flex justify-center">
+            <img src="/images/trade-anywhere.png" alt="Trade, deposit and withdraw anywhere" className="w-full max-w-md h-auto object-contain select-none drop-shadow-2xl" loading="lazy" />
           </div>
         </div>
       </section>
 
-      {/* TERMINAL PREVIEW */}
-      <section className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
-        <div className="mx-auto max-w-6xl grid md:grid-cols-2 gap-10 items-center">
-          <div className="flex justify-center">
-            <img src="/images/phone-mockup.png" alt="RAWMarkets terminal" className="w-full max-w-sm drop-shadow-2xl" loading="lazy" />
+      {/* WHY CHOOSE RAWMARKETS */}
+      <section id="why" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center max-w-2xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">{t('Why choose RAWMarkets?')}</h2>
+            <p className={`mt-3 text-lg font-semibold ${GREEN}`}>{t('One platform. Zero friction. Total control.')}</p>
+            <p className={`mt-3 ${T.faint}`}>{t('Trade, deposit and withdraw from one powerful terminal — with transparent pricing and fast, reliable execution.')}</p>
           </div>
-          <div>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">{t('A terminal built for speed')}</h2>
-            <p className={`mt-4 leading-relaxed max-w-md ${T.sub}`}>
-              {t('Professional candlestick charts, live bid/ask lines, one-tap orders and a market watch covering 45+ instruments.')}
-            </p>
-            <div className="mt-8 space-y-3">
-              {[
-                { icon: LineChart, title: t('Live market data'), desc: t('Streaming prices for crypto, forex, metals, indices and stocks, tick by tick.') },
-                { icon: Zap, title: t('Instant execution'), desc: t('Market orders filled in milliseconds with transparent pip-based spreads.') },
-                { icon: Wallet, title: t('Real-time PnL'), desc: t('Floating PnL, equity and margin recalculated live on every tick.') },
-              ].map((f) => (
-                <div key={f.title} className={`flex items-start gap-4 rounded-2xl border p-5 ${T.card}`}>
-                  <f.icon className={`h-5 w-5 mt-0.5 shrink-0 ${GREEN}`} />
-                  <div>
-                    <h3 className="font-semibold text-sm">{f.title}</h3>
-                    <p className={`text-xs mt-1 leading-relaxed ${T.fainter}`}>{f.desc}</p>
-                  </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-14">
+            {[
+              { icon: DollarSign, title: t('$0 Commissions'), desc: t('Keep more of what you earn with zero trading commissions on eligible instruments.') },
+              { icon: Gauge, title: t('Low Raw Spreads'), desc: t('Competitive, market-driven spreads designed to keep your trading costs low.') },
+              { icon: Layers, title: t('Everything in One Terminal'), desc: t('Trade, deposit, manage positions, monitor PnL and withdraw — all without leaving the platform.') },
+              { icon: Clock, title: t('Withdrawals Under 24 Hours'), desc: t('Your withdrawal request is reviewed within 24 hours. If we fail to meet our processing commitment, you receive $100 compensation.') },
+              { icon: LineChart, title: t('Real-Time PnL & Margin'), desc: t('Live equity, floating PnL, margin and positions, recalculated as the market moves.') },
+              { icon: Zap, title: t('Fast Execution'), desc: t('Built for speed, reliability and consistent execution when markets move.') },
+            ].map((f) => (
+              <div key={f.title} className={`rounded-2xl border p-6 transition group ${T.card} ${T.cardHover}`}>
+                <div className={`h-11 w-11 rounded-xl flex items-center justify-center mb-4 ${light ? 'bg-[#00b34a]/10' : 'bg-[#00FF66]/10'}`}>
+                  <f.icon className={`h-5 w-5 ${GREEN}`} />
                 </div>
-              ))}
-            </div>
+                <h3 className="font-semibold mb-2">{f.title}</h3>
+                <p className={`text-sm leading-relaxed ${T.fainter}`}>{f.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -329,13 +334,13 @@ const App = () => {
       <section id="features" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
         <div className="mx-auto max-w-6xl">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">{t('Built for trust.')}</h2>
-          <p className={`text-center mt-3 max-w-xl mx-auto ${T.faint}`}>{t("Everything you need. Nothing you don't.")}</p>
+          <p className={`text-center mt-3 max-w-xl mx-auto ${T.faint}`}>{t('Security, reliability and transparency at the core of everything we do — so you can trade with confidence.')}</p>
           <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mt-14">
             {[
-              { icon: ShieldCheck, title: t('Verified accounts'), desc: t('KYC verification keeps the platform safe for every trader.') },
-              { icon: Banknote, title: t('Reviewed withdrawals'), desc: t('Every withdrawal is manually reviewed before funds move.') },
-              { icon: Lock, title: t('Encrypted sessions'), desc: t('Your data and credentials are protected end to end.') },
-              { icon: Activity, title: t('Real-time monitoring'), desc: t('Margin levels are monitored live on every account.') },
+              { icon: ShieldCheck, title: t('Verified & Secure'), desc: t('KYC verification and strict account checks keep the platform safe for every trader.') },
+              { icon: Banknote, title: t('Reviewed Withdrawals'), desc: t('Every withdrawal is manually reviewed and processed within 24 hours.') },
+              { icon: Lock, title: t('Encrypted & Protected'), desc: t('Your data, funds and credentials are protected with end-to-end encryption.') },
+              { icon: Activity, title: t('Reliable Execution'), desc: t('Live margin monitoring and consistent, dependable execution on every trade.') },
             ].map((f) => (
               <div key={f.title} className={`rounded-2xl border p-6 transition group ${T.card} ${T.cardHover}`}>
                 <f.icon className={`h-6 w-6 mb-4 ${GREEN}`} />
@@ -351,6 +356,7 @@ const App = () => {
       <section id="how" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
         <div className="mx-auto max-w-5xl">
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">{t('Up and running in a minute.')}</h2>
+          <p className={`text-center mt-4 max-w-2xl mx-auto text-lg ${T.faint}`}>{t('Getting started with us is effortless — create your account, fund your wallet and you are trading live markets in minutes. No paperwork, no waiting.')}</p>
           {/* Full visual composition (transparent asset) — no cards/containers, keeps aspect ratio, never cropped */}
           <div className="mt-10 sm:mt-14 flex justify-center">
             <img
@@ -474,8 +480,7 @@ const App = () => {
               <X className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-2 mb-6">
-              <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
-              <span className="font-bold">RAW<span className={GREEN}>MARKETS</span></span>
+              <span className="font-bold text-lg">RAW<span className={GREEN}>MARKETS</span></span>
             </div>
             <div className={`flex rounded-lg p-1 mb-6 ${light ? 'bg-black/5' : 'bg-white/5'}`}>
               <button data-testid="auth-tab-login" onClick={() => { setMode('login'); setError('') }} className={`flex-1 py-2 text-sm rounded-md font-medium transition ${mode === 'login' ? 'bg-[#00FF66] text-black' : T.faint}`}>{t('Sign in')}</button>

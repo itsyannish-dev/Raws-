@@ -44,7 +44,6 @@ export function AppDrawer({ open, onClose }) {
       <div data-testid="app-drawer" className={`absolute inset-y-0 left-0 w-72 border-r overflow-y-auto flex flex-col ${light ? 'bg-white border-black/10' : 'bg-[#0a0a0a] border-white/10'}`}>
         <div className={`flex items-center justify-between px-4 h-14 border-b shrink-0 ${light ? 'border-black/5' : 'border-white/5'}`}>
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
             <span className={`font-bold text-sm ${light ? 'text-gray-900' : 'text-white'}`}>RAW<span className="text-[#00b34a]">MARKETS</span></span>
           </div>
           <button data-testid="drawer-close-btn" onClick={onClose} className={`p-1.5 ${light ? 'text-gray-400 hover:text-gray-900' : 'text-white/40 hover:text-white'}`}>

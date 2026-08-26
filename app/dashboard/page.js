@@ -187,7 +187,6 @@ const App = () => {
             <Menu className="h-5 w-5" />
           </button>
           <button onClick={() => router.push('/home')} className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-[#00FF66] flex items-center justify-center"><span className="text-black font-extrabold text-xs">R</span></div>
             <span className="font-bold text-sm">RAW<span className={GREEN}>MARKETS</span></span>
           </button>
         </div>
