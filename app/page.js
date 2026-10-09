@@ -331,26 +331,142 @@ const App = () => {
       </section>
 
       {/* FEATURES / TRUST */}
-      <section id="features" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
-        <div className="mx-auto max-w-6xl">
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-center">{t('Built for trust.')}</h2>
-          <p className={`text-center mt-3 max-w-xl mx-auto ${T.faint}`}>{t('Security, reliability and transparency at the core of everything we do — so you can trade with confidence.')}</p>
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4 mt-14">
-            {[
-              { icon: ShieldCheck, title: t('Verified & Secure'), desc: t('KYC verification and strict account checks keep the platform safe for every trader.') },
-              { icon: Banknote, title: t('Reviewed Withdrawals'), desc: t('Every withdrawal is manually reviewed and processed within 24 hours.') },
-              { icon: Lock, title: t('Encrypted & Protected'), desc: t('Your data, funds and credentials are protected with end-to-end encryption.') },
-              { icon: Activity, title: t('Reliable Execution'), desc: t('Live margin monitoring and consistent, dependable execution on every trade.') },
-            ].map((f) => (
-              <div key={f.title} className={`rounded-2xl border p-6 transition group ${T.card} ${T.cardHover}`}>
-                <f.icon className={`h-6 w-6 mb-4 ${GREEN}`} />
-                <h3 className="font-semibold mb-2">{f.title}</h3>
-                <p className={`text-sm leading-relaxed ${T.fainter}`}>{f.desc}</p>
+<section id="features" className={`relative overflow-hidden py-28 px-4 sm:px-6 border-t ${T.borderT}`}>
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-3xl" />
+    <div className="absolute left-1/2 top-0 h-px w-2/3 -translate-x-1/2 bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+  </div>
+
+  <div className="relative mx-auto max-w-6xl">
+    <div className="mx-auto max-w-3xl text-center">
+      <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium tracking-widest uppercase ${T.border} ${T.faint}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+        Built for trust
+      </div>
+
+      <h2 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+        Trust is built into
+        <span className="block text-emerald-400">every trade.</span>
+      </h2>
+
+      <p className={`mx-auto mt-6 max-w-2xl text-base leading-7 sm:text-lg ${T.faint}`}>
+        {t('Security, reliability and transparency at the core of everything we do — so you can trade with confidence.')}
+      </p>
+    </div>
+
+    <div className={`relative mx-auto mt-16 max-w-5xl overflow-hidden rounded-[2rem] border ${T.border} ${T.card}`}>
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/[0.07] via-transparent to-emerald-400/[0.03]" />
+
+      <div className="relative grid lg:grid-cols-[1fr_auto_1fr] items-center gap-10 p-6 sm:p-10 lg:p-14">
+
+        {/* Left benefits */}
+        <div className="space-y-5">
+          {[
+            {
+              icon: ShieldCheck,
+              title: t('Verified & Secure'),
+              desc: t('KYC verification and strict account checks keep the platform safe for every trader.')
+            },
+            {
+              icon: Banknote,
+              title: t('Reviewed Withdrawals'),
+              desc: t('Every withdrawal is manually reviewed and processed within 24 hours.')
+            }
+          ].map((f) => (
+            <div
+              key={f.title}
+              className={`group rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/40 ${T.border}`}
+            >
+              <div className="flex gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10">
+                  <f.icon className="h-5 w-5 text-emerald-400" />
+                </div>
+
+                <div>
+                  <h3 className="font-semibold">{f.title}</h3>
+                  <p className={`mt-1.5 text-sm leading-relaxed ${T.fainter}`}>
+                    {f.desc}
+                  </p>
+                </div>
               </div>
-            ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Central security visual */}
+        <div className="relative flex h-64 w-64 shrink-0 items-center justify-center justify-self-center sm:h-72 sm:w-72">
+          <div className="absolute inset-0 rounded-full border border-emerald-400/10" />
+          <div className="absolute inset-7 rounded-full border border-emerald-400/10" />
+          <div className="absolute inset-14 rounded-full bg-emerald-400/10 blur-2xl" />
+
+          <div className="absolute inset-3 animate-[spin_18s_linear_infinite] rounded-full border border-dashed border-emerald-400/20" />
+
+          <div className="relative flex h-28 w-28 items-center justify-center rounded-[2rem] border border-emerald-400/30 bg-emerald-400/10 shadow-[0_0_60px_rgba(52,211,153,0.18)]">
+            <ShieldCheck className="h-14 w-14 text-emerald-400" strokeWidth={1.5} />
+
+            <div className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400 text-black shadow-lg">
+              <span className="text-sm font-bold">✓</span>
+            </div>
+          </div>
+
+          <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur ${T.border}`}>
+            Secure infrastructure
           </div>
         </div>
-      </section>
+
+        {/* Right benefits */}
+        <div className="space-y-5">
+          {[
+            {
+              icon: Lock,
+              title: t('Encrypted & Protected'),
+              desc: t('Your data, funds and credentials are protected with end-to-end encryption.')
+            },
+            {
+              icon: Activity,
+              title: t('Reliable Execution'),
+              desc: t('Live margin monitoring and consistent, dependable execution on every trade.')
+            }
+          ].map((f) => (
+            <div
+              key={f.title}
+              className={`group rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/40 ${T.border}`}
+            >
+              <div className="flex gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-400/10">
+                  <f.icon className="h-5 w-5 text-emerald-400" />
+                </div>
+
+                <div>
+                  <h3 className="font-semibold">{f.title}</h3>
+                  <p className={`mt-1.5 text-sm leading-relaxed ${T.fainter}`}>
+                    {f.desc}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+      </div>
+
+      {/* Bottom trust bar */}
+      <div className={`relative grid grid-cols-2 border-t sm:grid-cols-4 ${T.border}`}>
+        {[
+          ['24/7', 'Monitoring'],
+          ['100%', 'Encrypted'],
+          ['<24h', 'Withdrawals'],
+          ['KYC', 'Verified']
+        ].map(([value, label]) => (
+          <div key={label} className={`px-4 py-5 text-center ${T.fainter}`}>
+            <div className="text-lg font-bold text-emerald-400">{value}</div>
+            <div className="mt-1 text-xs">{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>
 
       {/* HOW IT WORKS — dynamic steps */}
       <section id="how" className={`py-24 px-4 sm:px-6 border-t ${T.borderT}`}>
